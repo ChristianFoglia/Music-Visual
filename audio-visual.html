@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <title>Audio Visual Three.js</title>
+  <style>
+    body { margin: 0; overflow: hidden; background: #050505; color: #fff; font-family: 'Segoe UI', sans-serif; }
+    #canvas-container { width: 100vw; height: 100vh; position: fixed; top: 0; left: 0; z-index: 1; }
+    #ui-overlay { position: fixed; top: 20px; left: 20px; z-index: 10; background: rgba(0,0,0,0.7); padding: 16px 20px; border-radius: 12px; border: 1px solid rgba(0,255,255,0.3); max-width: 320px; }
+    #ui-overlay h1 { margin: 0 0 12px 0; font-size: 16px; color: #0ff; text-transform: uppercase; letter-spacing: 2px; }
+    .btn { background: rgba(0,255,255,0.1); border: 1px solid #0ff; color: #0ff; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; margin-right: 8px; margin-bottom: 8px; }
+    .slider-row { margin: 8px 0; display: flex; align-items: center; }
+    .slider-row label { font-size: 11px; text-transform: uppercase; color: #aaa; width: 80px; }
+    .slider-row input { flex: 1; margin: 0 8px; accent-color: #0ff; }
+    .slider-row span { font-size: 11px; color: #0ff; width: 70px; text-align: right; }
+    #file-name { font-size: 11px; color: #888; margin-top: 6px; font-style: italic; }
+    #equalizer { display: flex; gap: 3px; align-items: flex-end; height: 30px; margin-top: 10px; }
+    .eq-bar { width: 8px; background: linear-gradient(to top, #0ff, #f0f); border-radius: 2px; min-height: 2px; transition: height 0.05s; }
+    #error-box { position: fixed; bottom: 20px; left: 20px; right: 20px; max-height: 120px; overflow: auto; background: rgba(200,0,0,0.9); color: #fff; padding: 12px; font-family: monospace; font-size: 12px; z-index: 9999; display: none; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <div id="canvas-container"></div>
+  <div id="ui-overlay">
+    <h1>Audio Visual</h1>
+    <input type="file" id="audio-input" accept="audio/*" style="display:none;">
+    <button class="btn" id="btn-load">Carica Canzone</button>
+    <button class="btn" id="btn-change" style="display:none;">Cambia Canzone</button>
+    <button class="btn" id="btn-wire">Wireframe</button>
+    <div class="slider-row">
+      <label>Tema</label>
+      <input type="range" id="slider-theme" min="0" max="4" step="0.01" value="0">
+      <span id="theme-label">Cyberpunk</span>
+    </div>
+    <div id="file-name">Nessuna canzone caricata</div>
+    <div id="equalizer"></div>
+  </div>
+  <div id="error-box"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+  <script>
+    const errBox = document.getElementById('error-box');
+    window.addEventListener('error', function(e) {
+      errBox.style.display = 'block';
+      errBox.textContent += e.message + ' (riga ' + e.lineno + ')\n';
+    });
+
+    let scene, camera, renderer, matSolid, matWire, meshSolid, meshWire;
+    let particles, particlePositions, particleColors, particlePhases;
+    let particleSystem;
+    let audioCtx, analyser, audioEl;
+    let eqBars = [];
+    const themeNames = ['Rosa', 'Giallo', 'Blu', 'B/N', 'Arcobaleno'];
+    const themeColors = [
+      { r: 1.0, g: 0.2, b: 0.6 },    // Rosa
+      { r: 1.0, g: 0.9, b: 0.0 },    // Giallo
+      { r: 0.0, g: 0.4, b: 1.0 },    // Blu
+      { r: 0.8, g: 0.8, b: 0.8 },    // Bianco
+      { r: 1.0, g: 0.0, b: 1.0 }     // Magenta per arcobaleno base
+    ];
+
+    const vs = `
+      uniform float uTime;
+      uniform float uBass;
+      varying vec3 vN;
+      varying vec3 vP;
+      varying float vDisp;
+      vec3 mod289(vec3 x){return x-floor(x*(1.0/289.0))*289.0;}
+      vec4 mod289(vec4 x){return x-floor(x*(1.0/289.0))*289.0;}
+      vec4 permute(vec4 x){return mod289(((x*34.0)+1.0)*x);}
+      vec4 taylorInvSqrt(vec4 r){return 1.79284291400159-0.85373472095314*r;}
+      float snoise(vec3 v){
+        const vec2 C=vec2(1.0/6.0,1.0/3.0);
+        const vec4 D=vec4(0.0,0.5,1.0,2.0);
+        vec3 i=floor(v+dot(v,C.yyy));
+        vec3 x0=v-i+dot(i,C.xxx);
+        vec3 g=step(x0.yzx,x0.xyz);
+        vec3 l=1.0-g;
+        vec3 i1=min(g.xyz,l.zxy);
+        vec3 i2=max(g.xyz,l.zxy);
+        vec3 x1=x0-i1+C.xxx;
+        vec3 x2=x0-i2+C.yyy;
+        vec3 x3=x0-D.yyy;
+        i=mod289(i);
+        vec4 p=permute(permute(permute(i.z+vec4(0.0,i1.z,i2.z,1.0))+i.y+vec4(0.0,i1.y,i2.y,1.0))+i.x+vec4(0.0,i1.x,i2.x,1.0));
+        float n_=0.142857142857; vec3 ns=n_*D.wyz-D.xzx;
+        vec4 j=p-49.0*floor(p*ns.z*ns.z);
+        vec4 x_=floor(j*ns.z); vec4 y_=floor(j-7.0*x_);
+        vec4 x=x_*ns.x+ns.yyyy; vec4 y=y_*ns.x+ns.yyyy;
+        vec4 h=1.0-abs(x)-abs(y);
+        vec4 b0=vec4(x.xy,y.xy); vec4 b1=vec4(x.zw,y.zw);
+        vec4 s0=floor(b0)*2.0+1.0; vec4 s1=floor(b1)*2.0+1.0;
+        vec4 sh=-step(h,vec4(0.0));
+        vec4 a0=b0.xzyw+s0.xzyw*sh.xxyy;
+        vec4 a1=b1.xzyw+s1.xzyw*sh.zzww;
+        vec3 p0=vec3(a0.xy,h.x); vec3 p1=vec3(a0.zw,h.y);
+        vec3 p2=vec3(a1.xy,h.z); vec3 p3=vec3(a1.zw,h.w);
+        vec4 norm=taylorInvSqrt(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3)));
+        p0*=norm.x; p1*=norm.y; p2*=norm.z; p3*=norm.w;
+        vec4 m=max(0.6-vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)),0.0);
+        m=m*m;
+        return 42.0*dot(m*m,vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));
+      }
+      void main(){
+        float n=snoise(position*2.0+vec3(uTime*0.5));
+        float d=(n*0.3+uBass*1.5);
+        vec3 newPos=position+normal*d;
+        vDisp=abs(d);
+        vN=normalize((modelMatrix*vec4(normal,0.0)).xyz);
+        vP=(modelMatrix*vec4(newPos,1.0)).xyz;
+        gl_Position=projectionMatrix*modelViewMatrix*vec4(newPos,1.0);
+      }
+    `;
+
+    const fs = `
+      precision highp float;
+      uniform float uTime;
+      uniform float uBass;
+      uniform float uTreble;
+      uniform float uTheme;
+      varying vec3 vN;
+      varying vec3 vP;
+      varying float vDisp;
+      vec3 palette(float t, float idx){
+        float tt = t + uTime * 0.3;
+        float wave = sin(tt * 3.0) * 0.5 + 0.5;
+        float wave2 = cos(tt * 7.0 + 1.5) * 0.5 + 0.5;
+        float wave3 = sin(tt * 11.0 + 3.0) * 0.5 + 0.5;
+        float chaos = sin(tt * 13.0 * (1.0 + uBass)) * 0.5 + 0.5;
+
+        // === 1. ROSA caotico ===
+        if(idx<0.5){
+          vec3 hotPink = vec3(1.0, 0.0, 0.5);
+          vec3 electricBlue = vec3(0.2, 0.6, 1.0);
+          vec3 acidGreen = vec3(0.6, 1.0, 0.2);
+          vec3 deepPurple = vec3(0.4, 0.0, 0.8);
+          vec3 peach = vec3(1.0, 0.6, 0.4);
+          vec3 mix1 = mix(hotPink, electricBlue, wave);
+          vec3 mix2 = mix(acidGreen, deepPurple, wave2);
+          vec3 mix3 = mix(mix1, mix2, wave3);
+          return mix(mix3, peach, chaos * 0.5);
+        }
+        // === 2. GIALLO caotico ===
+        else if(idx<1.5){
+          vec3 lemon = vec3(1.0, 0.9, 0.0);
+          vec3 hotMagenta = vec3(1.0, 0.0, 0.6);
+          vec3 toxicGreen = vec3(0.0, 1.0, 0.3);
+          vec3 bloodOrange = vec3(1.0, 0.2, 0.0);
+          vec3 skyCyan = vec3(0.0, 0.8, 1.0);
+          vec3 mix1 = mix(lemon, hotMagenta, wave);
+          vec3 mix2 = mix(toxicGreen, bloodOrange, wave2);
+          vec3 mix3 = mix(mix1, mix2, wave3);
+          return mix(mix3, skyCyan, chaos * 0.4);
+        }
+        // === 3. BLU caotico ===
+        else if(idx<2.5){
+          vec3 navy = vec3(0.0, 0.1, 0.6);
+          vec3 neonCyan = vec3(0.0, 1.0, 1.0);
+          vec3 sunsetOrange = vec3(1.0, 0.3, 0.1);
+          vec3 laserPink = vec3(1.0, 0.0, 0.8);
+          vec3 iceWhite = vec3(0.8, 0.9, 1.0);
+          vec3 mix1 = mix(navy, neonCyan, wave);
+          vec3 mix2 = mix(sunsetOrange, laserPink, wave2);
+          vec3 mix3 = mix(mix1, mix2, wave3);
+          return mix(mix3, iceWhite, chaos * 0.3);
+        }
+        // === 4. BIANCO/NERO + grigi psichedelici ===
+        else if(idx<3.5){
+          float grey = sin(t * 2.0 + uTime * 0.15) * 0.5 + 0.5;
+          float tint = sin(t * 8.0 + uTime * 0.5) * 0.5 + 0.5;
+          vec3 bw = vec3(grey);
+          vec3 neon = vec3(0.0, 1.0, 1.0) * (0.3 + uTreble * 0.7);
+          return mix(bw, neon, tint * uTreble * 0.4);
+        }
+        // === 5. ARCOBALENO psichedelico ===
+        else {
+          float r = sin(t * 6.0 + uTime * 0.4) * 0.5 + 0.5;
+          float g = sin(t * 6.0 + uTime * 0.4 + 2.094) * 0.5 + 0.5;
+          float b = sin(t * 6.0 + uTime * 0.4 + 4.189) * 0.5 + 0.5;
+          float boost = 0.7 + uBass * 0.6;
+          return vec3(r, g, b) * boost;
+        }
+      }
+      void main(){
+        float t=length(vP)*0.5+vDisp*2.0+uTime*0.05;
+        float i0=floor(uTheme); float i1=i0+1.0; float mf=fract(uTheme);
+        vec3 c0=palette(t,i0); vec3 c1=palette(t,min(i1,3.0));
+        vec3 base=mix(c0,c1,mf);
+        vec3 vd=normalize(vec3(0.0,0.0,3.0)-vP);
+        float fr=pow(1.0-max(dot(normalize(vN),vd),0.0),3.0);
+        vec3 final=base*(0.8+vDisp*2.0)+vec3(fr*0.5);
+        gl_FragColor=vec4(final,1.0);
+      }
+    `;
+
+    function createParticles() {
+      const count = 2000;
+      particles = new THREE.BufferGeometry();
+      particlePositions = new Float32Array(count * 3);
+      particleColors = new Float32Array(count * 3);
+      particlePhases = new Float32Array(count);
+      
+      for (let i = 0; i < count; i++) {
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos(2 * Math.random() - 1);
+        const r = 1.3 + Math.random() * 2.5;
+        particlePositions[i*3] = r * Math.sin(phi) * Math.cos(theta);
+        particlePositions[i*3+1] = r * Math.sin(phi) * Math.sin(theta);
+        particlePositions[i*3+2] = r * Math.cos(phi);
+        particleColors[i*3] = 0.05;
+        particleColors[i*3+1] = 0.05;
+        particleColors[i*3+2] = 0.08;
+        particlePhases[i] = Math.random() * Math.PI * 2;
+      }
+      
+      particles.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+      particles.setAttribute('color', new THREE.BufferAttribute(particleColors, 3));
+      
+      const pMat = new THREE.PointsMaterial({
+        size: 0.04,
+        vertexColors: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        transparent: true,
+        opacity: 0.9,
+        sizeAttenuation: true
+      });
+      
+      particleSystem = new THREE.Points(particles, pMat);
+      scene.add(particleSystem);
+    }
+
+    function init(){
+      scene=new THREE.Scene(); scene.background=new THREE.Color(0x050505);
+      camera=new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 100);
+      camera.position.z=3;
+      renderer=new THREE.WebGLRenderer({antialias:true});
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+      document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+      matSolid=new THREE.ShaderMaterial({
+        uniforms:{uTime:{value:0},uBass:{value:0},uTreble:{value:0},uTheme:{value:0}},
+        vertexShader:vs, fragmentShader:fs, side:THREE.DoubleSide
+      });
+
+      let g=new THREE.SphereGeometry(1,128,128);
+      meshSolid=new THREE.Mesh(g, matSolid);
+      scene.add(meshSolid);
+
+      matWire=matSolid.clone();
+      matWire.wireframe=true;
+      meshWire=new THREE.Mesh(g, matWire);
+      meshWire.visible=false;
+      scene.add(meshWire);
+
+      createParticles();
+
+      window.addEventListener('resize', () => {
+        camera.aspect=window.innerWidth/window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+    }
+
+    function loadAudio(file){
+      audioEl=document.createElement('audio');
+      audioEl.src=URL.createObjectURL(file);
+      audioEl.crossOrigin='anonymous';
+      audioEl.loop=true;
+      audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+      let src=audioCtx.createMediaElementSource(audioEl);
+      analyser=audioCtx.createAnalyser(); analyser.fftSize=512;
+      src.connect(analyser); analyser.connect(audioCtx.destination);
+      audioEl.play();
+      document.getElementById('file-name').textContent=file.name;
+      document.getElementById('btn-load').style.display='none';
+      document.getElementById('btn-change').style.display='inline-block';
+    }
+
+    function getAudio(){
+      if(!analyser||!audioCtx) return {bass:0, treble:0};
+      let data=new Uint8Array(analyser.frequencyBinCount);
+      analyser.getByteFrequencyData(data);
+      let nyq=audioCtx.sampleRate/2, bins=analyser.frequencyBinCount, fpb=nyq/bins;
+      let bEnd=Math.min(Math.floor(100/fpb),bins), bSum=0;
+      for(let i=0;i<bEnd;i++) bSum+=data[i];
+      let bass=bSum/Math.max(bEnd*255,1);
+      let tSt=Math.min(Math.floor(2000/fpb),bins), tEn=Math.min(Math.floor(8000/fpb),bins), tSum=0;
+      for(let i=tSt;i<tEn;i++) tSum+=data[i];
+      let treble=tSum/Math.max((tEn-tSt)*255,1);
+      return {bass, treble};
+    }
+
+    function makeEq(){
+      let c=document.getElementById('equalizer');
+      for(let i=0;i<8;i++){ let b=document.createElement('div'); b.className='eq-bar'; b.style.height='2px'; c.appendChild(b); eqBars.push(b); }
+    }
+    function updateEq(){
+      if(!analyser) return;
+      let data=new Uint8Array(analyser.frequencyBinCount); analyser.getByteFrequencyData(data);
+      let bpb=Math.floor(data.length/eqBars.length);
+      for(let i=0;i<eqBars.length;i++){
+        let s=0; for(let j=0;j<bpb;j++) s+=data[i*bpb+j];
+        eqBars[i].style.height=Math.max(2,(s/bpb/255)*30)+'px';
+      }
+    }
+
+    function setupUI(){
+      let audIn=document.getElementById('audio-input');
+      let btnLoad=document.getElementById('btn-load');
+      let btnChg=document.getElementById('btn-change');
+      let btnWire=document.getElementById('btn-wire');
+      let sldThm=document.getElementById('slider-theme');
+      let lblThm=document.getElementById('theme-label');
+
+      btnLoad.addEventListener('click',()=> audIn.click());
+      btnChg.addEventListener('click',()=> { if(audioEl){audioEl.pause();audioEl=null;} audIn.value=''; audIn.click(); });
+      audIn.addEventListener('change',(e)=> { let f=e.target.files[0]; if(f) loadAudio(f); });
+      sldThm.addEventListener('input',(e)=> { let v=parseFloat(e.target.value);         lblThm.textContent=themeNames[Math.min(Math.round(v),4)]; });
+
+      let wireOn=false;
+      btnWire.addEventListener('click',()=> {
+        wireOn=!wireOn;
+        meshSolid.visible=!wireOn;
+        meshWire.visible=wireOn;
+        btnWire.textContent=wireOn?'Piena':'Wireframe';
+        btnWire.style.borderColor=wireOn?'#f0f':'#0ff';
+        btnWire.style.color=wireOn?'#f0f':'#0ff';
+      });
+
+      makeEq();
+      document.addEventListener('click',()=> { if(audioCtx&&audioCtx.state==='suspended') audioCtx.resume(); },{once:true});
+    }
+
+    function animate(time){
+      requestAnimationFrame(animate);
+      let t=time*0.001;
+
+      matSolid.uniforms.uTime.value=t;
+      if(matWire) matWire.uniforms.uTime.value=t;
+
+      let a={bass:0,treble:0};
+      if(analyser){
+        a=getAudio();
+        matSolid.uniforms.uBass.value+=(a.bass-matSolid.uniforms.uBass.value)*0.15;
+        matSolid.uniforms.uTreble.value+=(a.treble-matSolid.uniforms.uTreble.value)*0.2;
+        if(matWire){
+          matWire.uniforms.uBass.value=matSolid.uniforms.uBass.value;
+          matWire.uniforms.uTreble.value=matSolid.uniforms.uTreble.value;
+        }
+        updateEq();
+      }
+      let bass=matSolid.uniforms.uBass.value;
+      let treble=matSolid.uniforms.uTreble.value;
+
+      let themeVal=parseFloat(document.getElementById('slider-theme').value);
+      matSolid.uniforms.uTheme.value=themeVal;
+      if(matWire) matWire.uniforms.uTheme.value=themeVal;
+      let themeIdx=Math.round(themeVal);
+      let tc=themeColors[Math.min(themeIdx,4)];
+
+      // === PARTICELLE ===
+      const positions = particles.attributes.position.array;
+      const colors = particles.attributes.color.array;
+      const count = 2000;
+      const activation = bass * 0.6 + treble * 0.4;
+      
+      for (let i = 0; i < count; i++) {
+        const idx = i * 3;
+        const phase = particlePhases[i];
+        
+        // Movimento lento
+        const orbitSpeed = 0.2 + activation * 0.8;
+        positions[idx] += Math.sin(t * orbitSpeed + phase) * 0.002;
+        positions[idx+1] += Math.cos(t * orbitSpeed * 0.7 + phase * 1.3) * 0.002;
+        positions[idx+2] += Math.sin(t * orbitSpeed * 0.5 + phase * 0.8) * 0.0015;
+        
+        // Illuminazione randomica basata sull'audio
+        const myRandom = Math.random();
+        const threshold = activation * 0.85;
+        
+        if (myRandom < threshold) {
+          // ACCESA: colore del tema con intensita random
+          const intensity = 0.2 + Math.random() * 0.8;
+          colors[idx] = tc.r * intensity;
+          colors[idx+1] = tc.g * intensity;
+          colors[idx+2] = tc.b * intensity;
+        } else {
+          // SPENTA: decay verso grigio scuro
+          colors[idx] *= 0.90;
+          colors[idx+1] *= 0.90;
+          colors[idx+2] *= 0.90;
+          // Minimo per non scomparire
+          if (colors[idx] < 0.03) colors[idx] = 0.03;
+          if (colors[idx+1] < 0.03) colors[idx+1] = 0.03;
+          if (colors[idx+2] < 0.05) colors[idx+2] = 0.05;
+        }
+        
+        // Scoppio con bassi forti
+        if (bass > 0.55 && Math.random() < 0.08) {
+          const dist = Math.sqrt(positions[idx]**2 + positions[idx+1]**2 + positions[idx+2]**2);
+          if (dist > 0.1) {
+            const push = 0.025 * bass;
+            positions[idx] += (positions[idx]/dist) * push;
+            positions[idx+1] += (positions[idx+1]/dist) * push;
+            positions[idx+2] += (positions[idx+2]/dist) * push;
+            // Bianco brillante
+            colors[idx] = 1.0;
+            colors[idx+1] = 1.0;
+            colors[idx+2] = 1.0;
+          }
+        }
+      }
+      
+      particles.attributes.position.needsUpdate = true;
+      particles.attributes.color.needsUpdate = true;
+      particleSystem.material.size = 0.03 + activation * 0.07;
+
+      scene.rotation.y=t*0.15;
+      scene.rotation.x=Math.sin(t*0.1)*0.05;
+
+      renderer.render(scene, camera);
+    }
+
+    init();
+    setupUI();
+    animate(0);
+  </script>
+</body>
+</html>
