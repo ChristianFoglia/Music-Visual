@@ -4,69 +4,146 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-  <title>Audio Visual Three.js</title>
+  <title>Nature Visual — Enchanted Forest</title>
   <style>
-    body { margin: 0; overflow: hidden; background: #050505; color: #fff; font-family: 'Segoe UI', sans-serif; }
+    body { margin: 0; overflow: hidden; background: #000; color: #fff; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
     #canvas-container { width: 100vw; height: 100vh; position: fixed; top: 0; left: 0; z-index: 1; }
-    #ui-overlay { position: fixed; top: 20px; left: 20px; z-index: 10; background: rgba(0,0,0,0.7); padding: 16px 20px; border-radius: 12px; border: 1px solid rgba(0,255,255,0.3); max-width: 320px; }
-    #ui-overlay h1 { margin: 0 0 12px 0; font-size: 16px; color: #0ff; text-transform: uppercase; letter-spacing: 2px; }
-    .btn { background: rgba(0,255,255,0.1); border: 1px solid #0ff; color: #0ff; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; margin-right: 8px; margin-bottom: 8px; }
+    #ui-overlay { position: fixed; top: 20px; left: 20px; z-index: 10; background: rgba(0,0,0,0.6); padding: 16px 20px; border-radius: 12px; border: 1px solid rgba(0,255,255,0.2); backdrop-filter: blur(4px); max-width: 300px; }
+    #ui-overlay h1 { margin: 0 0 12px 0; font-size: 15px; color: #0ff; text-transform: uppercase; letter-spacing: 2px; }
+    .btn { background: rgba(0,255,255,0.08); border: 1px solid #0ff; color: #0ff; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; transition: all 0.2s; margin-right: 8px; margin-bottom: 8px; }
+    .btn:hover { background: rgba(0,255,255,0.25); box-shadow: 0 0 12px rgba(0,255,255,0.3); }
+    #ui-overlay.collapsed #menu-content { display: none; }
+    #ui-overlay.collapsed #btn-menu { margin: 0; }
+    #btn-menu { background: rgba(0,255,255,0.08); border: 1px solid #0ff; color: #0ff; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 16px; margin-bottom: 8px; transition: all 0.2s; }
+    #btn-menu:hover { background: rgba(0,255,255,0.25); box-shadow: 0 0 12px rgba(0,255,255,0.3); }
+    .sym-row { display: flex; gap: 8px; margin-bottom: 8px; }
+    .sym-row .btn { flex: 1; margin: 0; }
     .slider-row { margin: 8px 0; display: flex; align-items: center; }
-    .slider-row label { font-size: 11px; text-transform: uppercase; color: #aaa; width: 80px; }
-    .slider-row input { flex: 1; margin: 0 8px; accent-color: #0ff; }
+    .slider-row label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #aaa; width: 80px; }
+    .slider-row input[type="range"] { flex: 1; margin: 0 8px; accent-color: #0ff; }
     .slider-row span { font-size: 11px; color: #0ff; width: 70px; text-align: right; }
     #file-name { font-size: 11px; color: #888; margin-top: 6px; font-style: italic; }
     #equalizer { display: flex; gap: 3px; align-items: flex-end; height: 30px; margin-top: 10px; }
-    .eq-bar { width: 8px; background: linear-gradient(to top, #0ff, #f0f); border-radius: 2px; min-height: 2px; transition: height 0.05s; }
-    #error-box { position: fixed; bottom: 20px; left: 20px; right: 20px; max-height: 120px; overflow: auto; background: rgba(200,0,0,0.9); color: #fff; padding: 12px; font-family: monospace; font-size: 12px; z-index: 9999; display: none; border-radius: 8px; }
+    .eq-bar { width: 8px; background: linear-gradient(to top, #0ff, #f0f); border-radius: 2px; min-height: 2px; transition: height 0.05s linear; }
+    @keyframes pulse-dot { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.8); } 100% { opacity: 1; transform: scale(1); } }
+    #btn-record.recording { background: rgba(255,0,0,0.25); border-color: #f44; color: #f44; }
+    #btn-record.recording:hover { background: rgba(255,0,0,0.4); box-shadow: 0 0 12px rgba(255,0,0,0.4); }
   </style>
 </head>
 <body>
   <div id="canvas-container"></div>
-  <div id="ui-overlay">
-    <h1>Audio Visual</h1>
-    <input type="file" id="audio-input" accept="audio/*" style="display:none;">
-    <button class="btn" id="btn-load">Carica Canzone</button>
-    <button class="btn" id="btn-change" style="display:none;">Cambia Canzone</button>
-    <button class="btn" id="btn-wire">Wireframe</button>
-    <div class="slider-row">
-      <label>Tema</label>
-      <input type="range" id="slider-theme" min="0" max="4" step="0.01" value="0">
-      <span id="theme-label">Cyberpunk</span>
+    <div id="ui-overlay" class="collapsed">
+      <button id="btn-menu">&#9776; MENU</button>
+      <div id="menu-content">
+        <h1>Nature Visual</h1>
+        <input type="file" id="audio-input" accept="audio/*,.wav,.m4a,.aac,.ogg,.flac" style="display:none;">
+        <button class="btn" id="btn-load">Load Song</button>
+        <button class="btn" id="btn-play">Play</button>
+        <button class="btn" id="btn-change" style="display:none;">Change</button>
+        <div class="slider-row">
+          <label>Theme</label>
+          <input type="range" id="slider-theme" min="0" max="4" step="0.01" value="0">
+          <span id="theme-label">Pink</span>
+        </div>
+        <div class="slider-row">
+          <label>Clouds</label>
+          <input type="range" id="slider-nuvole" min="0" max="1" step="0.01" value="0">
+          <span id="nuvole-label">0%</span>
+        </div>
+        <div class="slider-row">
+          <label>Roots</label>
+          <input type="range" id="slider-radici" min="0" max="1" step="0.01" value="0">
+          <span id="radici-label">0%</span>
+        </div>
+        <div class="slider-row">
+          <label>Organic</label>
+          <input type="range" id="slider-organic" min="0" max="1" step="0.01" value="0">
+          <span id="organic-label">0%</span>
+        </div>
+        <div class="slider-row">
+          <label>Insane</label>
+          <input type="range" id="slider-assurdo" min="0" max="1" step="0.01" value="0">
+          <span id="assurdo-label">0%</span>
+        </div>
+        <div class="sym-row">
+          <button class="btn" id="btn-symmetry">H-Sym</button>
+          <button class="btn" id="btn-symmetry-v">V-Sym</button>
+        </div>
+        <button class="btn" id="btn-random">Randomize</button>
+        <button class="btn" id="btn-record">⏺ Record</button>
+        <div id="rec-status" style="display:none;font-size:11px;color:#f44;margin-top:6px;">
+          <span id="rec-dot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#f44;margin-right:6px;animation:pulse-dot 1s infinite;"></span>Recording... <span id="rec-time">0s</span>
+        </div>
+        <div id="file-name">No song loaded</div>
+        <div id="equalizer"></div>
+      </div>
     </div>
-    <div id="file-name">Nessuna canzone caricata</div>
-    <div id="equalizer"></div>
-  </div>
-  <div id="error-box"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
   <script>
-    const errBox = document.getElementById('error-box');
-    window.addEventListener('error', function(e) {
-      errBox.style.display = 'block';
-      errBox.textContent += e.message + ' (riga ' + e.lineno + ')\n';
-    });
-
-    let scene, camera, renderer, matSolid, matWire, meshSolid, meshWire;
+    // ============================================
+    // VARIABILI GLOBALI
+    // ============================================
+    let scene, camera, renderer;
+    let matSolid, mainMesh;
     let particles, particlePositions, particleColors, particlePhases;
     let particleSystem;
     let audioCtx, analyser, audioEl;
+    let isPlaying = false;
     let eqBars = [];
-    const themeNames = ['Rosa', 'Giallo', 'Blu', 'B/N', 'Arcobaleno'];
+    const themeNames = ['Pink','Yellow','Blue','B/W','Rainbow'];
     const themeColors = [
-      { r: 1.0, g: 0.2, b: 0.6 },    // Rosa
-      { r: 1.0, g: 0.9, b: 0.0 },    // Giallo
-      { r: 0.0, g: 0.4, b: 1.0 },    // Blu
-      { r: 0.8, g: 0.8, b: 0.8 },    // Bianco
-      { r: 1.0, g: 0.0, b: 1.0 }     // Magenta per arcobaleno base
+      {r:1.0,g:0.0,b:0.5}, {r:1.0,g:0.9,b:0.0}, {r:0.0,g:0.4,b:1.0},
+      {r:0.8,g:0.8,b:0.8}, {r:1.0,g:0.0,b:1.0}
     ];
 
-    const vs = `
+    // --- PING-PONG FEEDBACK ---
+    let rtA, rtB;
+    let feedbackScene, displayScene, orthoCamera;
+    let feedbackMat, displayMat;
+
+    // --- STRATI ORGANICI ---
+    let rtNuvoleA, rtNuvoleB;
+    let rtRadiciA, rtRadiciB;
+    let rtMuschioA, rtMuschioB;
+    let nuvoleScene, radiciScene, muschioScene, mixerScene;
+    let nuvoleMat, radiciMat, muschioMat, mixerMat;
+    
+    // --- REACTION-DIFFUSION ---
+    let rdA, rdB;
+    let rdSimScene, rdCompositeScene;
+    let rdSimMat, rdCompositeMat;
+    
+    // --- ASSURDO (reaction-diffusion.html overlay) ---
+    let rtAssurdoA, rtAssurdoB;
+    let assurdoSimScene, assurdoCompositeScene;
+    let assurdoSimMat, assurdoCompositeMat;
+    
+    // --- STATE ---
+    let symmetryActive=false;
+    let symmetryVertical=false;
+    let rtTemp;
+    let frameCount=0;
+
+    // --- RECORDING ---
+    let mediaRecorder=null;
+    let recordedChunks=[];
+    let isRecording=false;
+    let recordingStartTime=0;
+    let recordingTimer=null;
+    let audioDestination=null;
+
+    // ============================================
+    // SHADER SFERA (2 layer noise + shading + Fresnel)
+    // ============================================
+    const vsMain = `
       uniform float uTime;
       uniform float uBass;
       varying vec3 vN;
       varying vec3 vP;
       varying float vDisp;
+      varying float vDetail;
+
       vec3 mod289(vec3 x){return x-floor(x*(1.0/289.0))*289.0;}
       vec4 mod289(vec4 x){return x-floor(x*(1.0/289.0))*289.0;}
       vec4 permute(vec4 x){return mod289(((x*34.0)+1.0)*x);}
@@ -103,331 +180,1643 @@
         m=m*m;
         return 42.0*dot(m*m,vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));
       }
+
       void main(){
-        float n=snoise(position*2.0+vec3(uTime*0.5));
-        float d=(n*0.3+uBass*1.5);
+        float n1=snoise(position*2.0+vec3(uTime*0.5));
+        float n2=snoise(position*6.0+vec3(uTime*0.8+50.0));
+        float d=(n1*0.3+n2*0.08+uBass*0.8);
         vec3 newPos=position+normal*d;
-        vDisp=abs(d);
+        vDisp=abs(d); vDetail=abs(n2);
         vN=normalize((modelMatrix*vec4(normal,0.0)).xyz);
         vP=(modelMatrix*vec4(newPos,1.0)).xyz;
         gl_Position=projectionMatrix*modelViewMatrix*vec4(newPos,1.0);
       }
     `;
 
-    const fs = `
+    const fsMain = `
       precision highp float;
       uniform float uTime;
-      uniform float uBass;
       uniform float uTreble;
       uniform float uTheme;
       varying vec3 vN;
       varying vec3 vP;
       varying float vDisp;
+      varying float vDetail;
+
+      vec3 palette(float t,float idx){
+        float tt=t+uTime*0.3;
+        float wave=sin(tt*3.0)*0.5+0.5;
+        float wave2=cos(tt*7.0+1.5)*0.5+0.5;
+        float wave3=sin(tt*11.0+3.0)*0.5+0.5;
+        float chaos=sin(tt*13.0)*0.5+0.5;
+        if(idx<0.5){
+          vec3 hotPink=vec3(1.0,0.0,0.5);
+          vec3 electricBlue=vec3(0.2,0.6,1.0);
+          vec3 acidGreen=vec3(0.6,1.0,0.2);
+          vec3 deepPurple=vec3(0.4,0.0,0.8);
+          vec3 peach=vec3(1.0,0.6,0.4);
+          vec3 mix1=mix(hotPink,electricBlue,wave);
+          vec3 mix2=mix(acidGreen,deepPurple,wave2);
+          vec3 mix3=mix(mix1,mix2,wave3);
+          return mix(mix3,peach,chaos*0.5);
+        }else if(idx<1.5){
+          vec3 lemon=vec3(1.0,0.9,0.0);
+          vec3 hotMagenta=vec3(1.0,0.0,0.6);
+          vec3 toxicGreen=vec3(0.0,1.0,0.3);
+          vec3 bloodOrange=vec3(1.0,0.2,0.0);
+          vec3 skyCyan=vec3(0.0,0.8,1.0);
+          vec3 mix1=mix(lemon,hotMagenta,wave);
+          vec3 mix2=mix(toxicGreen,bloodOrange,wave2);
+          vec3 mix3=mix(mix1,mix2,wave3);
+          return mix(mix3,skyCyan,chaos*0.4);
+        }else if(idx<2.5){
+          vec3 navy=vec3(0.0,0.1,0.6);
+          vec3 neonCyan=vec3(0.0,1.0,1.0);
+          vec3 sunsetOrange=vec3(1.0,0.3,0.1);
+          vec3 laserPink=vec3(1.0,0.0,0.8);
+          vec3 iceWhite=vec3(0.8,0.9,1.0);
+          vec3 mix1=mix(navy,neonCyan,wave);
+          vec3 mix2=mix(sunsetOrange,laserPink,wave2);
+          vec3 mix3=mix(mix1,mix2,wave3);
+          return mix(mix3,iceWhite,chaos*0.3);
+        }else if(idx<3.5){
+          float grey=sin(t*2.0+uTime*0.15)*0.5+0.5;
+          float tint=sin(t*8.0+uTime*0.5)*0.5+0.5;
+          vec3 bw=vec3(grey);
+          vec3 neon=vec3(0.0,1.0,1.0)*(0.3+uTreble*0.2);
+          return mix(bw,neon,tint*uTreble*0.15);
+        }else{
+          float r=sin(t*6.0+uTime*0.4)*0.5+0.5;
+          float g=sin(t*6.0+uTime*0.4+2.094)*0.5+0.5;
+          float b=sin(t*6.0+uTime*0.4+4.189)*0.5+0.5;
+          float boost=0.7+uTreble*0.6;
+          return vec3(r,g,b)*boost;
+        }
+      }
+
+      void main(){
+        float t=length(vP)*0.5+vDisp*2.0+uTime*0.05;
+        float i0=floor(uTheme); float i1=i0+1.0; float mf=fract(uTheme);
+        vec3 c0=palette(t,i0); vec3 c1=palette(t,min(i1,4.0));
+        vec3 base=mix(c0,c1,mf);
+        vec3 vd=normalize(vec3(0.0,0.0,3.0)-vP);
+        vec3 fakeNormal=normalize(vN+vec3(vDetail*0.5));
+        float diffuse=max(dot(fakeNormal,vd),0.0);
+        float fresnel=pow(1.0-max(dot(normalize(vN),vd),0.0),3.0);
+        vec3 final=base*(0.6+diffuse*0.4+vDisp*2.0)+vec3(fresnel*0.5);
+        final+=vec3(vDetail*0.15);
+        gl_FragColor=vec4(final,1.0);
+      }
+    `;
+
+    // ============================================
+    // SHADER FEEDBACK — Scie fluide (zoom+blur+fade)
+    // ============================================
+    const vsFeedback = `
+      varying vec2 vUv;
+      void main(){
+        vUv=uv;
+        gl_Position=vec4(position.xy,0.0,1.0);
+      }
+    `;
+
+    const fsFeedback = `
+      precision mediump float;
+      uniform sampler2D tDiffuse;
+      uniform float uZoom;
+      uniform float uFade;
+      uniform float uBlur;
+      varying vec2 vUv;
+
+      void main(){
+        vec2 uv=(vUv-0.5)*uZoom+0.5;
+        vec4 col=vec4(0.0);
+        float total=0.0;
+        for(float x=-2.0;x<=2.0;x++){
+          for(float y=-2.0;y<=2.0;y++){
+            vec2 off=vec2(x,y)*uBlur*0.002;
+            float w=exp(-(x*x+y*y)*0.15);
+            col+=texture2D(tDiffuse,uv+off)*w;
+            total+=w;
+          }
+        }
+        col/=total;
+        gl_FragColor=col*uFade;
+      }
+    `;
+
+    const vsDisplay = `
+      varying vec2 vUv;
+      void main(){
+        vUv=uv;
+        gl_Position=vec4(position.xy,0.0,1.0);
+      }
+    `;
+    const fsDisplay = `
+      precision mediump float;
+      uniform sampler2D tDiffuse;
+      varying vec2 vUv;
+      void main(){
+        gl_FragColor=texture2D(tDiffuse,vUv);
+      }
+    `;
+
+    // ============================================
+    // SHADER NUVOLE — Domain Warping + FBM
+    // ============================================
+    const fsNuvole = `
+      precision highp float;
+      uniform sampler2D tPrev;
+      uniform float uTime;
+      uniform float uBass;
+      uniform float uTheme;
+      varying vec2 vUv;
+
+      vec3 mod289(vec3 x){return x-floor(x*(1.0/289.0))*289.0;}
+      vec4 mod289(vec4 x){return x-floor(x*(1.0/289.0))*289.0;}
+      vec4 permute(vec4 x){return mod289(((x*34.0)+1.0)*x);}
+      vec4 taylorInvSqrt(vec4 r){return 1.79284291400159-0.85373472095314*r;}
+      float snoise(vec3 v){
+        const vec2 C=vec2(1.0/6.0,1.0/3.0);
+        const vec4 D=vec4(0.0,0.5,1.0,2.0);
+        vec3 i=floor(v+dot(v,C.yyy));
+        vec3 x0=v-i+dot(i,C.xxx);
+        vec3 g=step(x0.yzx,x0.xyz);
+        vec3 l=1.0-g;
+        vec3 i1=min(g.xyz,l.zxy);
+        vec3 i2=max(g.xyz,l.zxy);
+        vec3 x1=x0-i1+C.xxx;
+        vec3 x2=x0-i2+C.yyy;
+        vec3 x3=x0-D.yyy;
+        i=mod289(i);
+        vec4 p=permute(permute(permute(i.z+vec4(0.0,i1.z,i2.z,1.0))+i.y+vec4(0.0,i1.y,i2.y,1.0))+i.x+vec4(0.0,i1.x,i2.x,1.0));
+        float n_=0.142857142857; vec3 ns=n_*D.wyz-D.xzx;
+        vec4 j=p-49.0*floor(p*ns.z*ns.z);
+        vec4 x_=floor(j*ns.z); vec4 y_=floor(j-7.0*x_);
+        vec4 x=x_*ns.x+ns.yyyy; vec4 y=y_*ns.x+ns.yyyy;
+        vec4 h=1.0-abs(x)-abs(y);
+        vec4 b0=vec4(x.xy,y.xy); vec4 b1=vec4(x.zw,y.zw);
+        vec4 s0=floor(b0)*2.0+1.0; vec4 s1=floor(b1)*2.0+1.0;
+        vec4 sh=-step(h,vec4(0.0));
+        vec4 a0=b0.xzyw+s0.xzyw*sh.xxyy;
+        vec4 a1=b1.xzyw+s1.xzyw*sh.zzww;
+        vec3 p0=vec3(a0.xy,h.x); vec3 p1=vec3(a0.zw,h.y);
+        vec3 p2=vec3(a1.xy,h.z); vec3 p3=vec3(a1.zw,h.w);
+        vec4 norm=taylorInvSqrt(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3)));
+        p0*=norm.x; p1*=norm.y; p2*=norm.z; p3*=norm.w;
+        vec4 m=max(0.6-vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)),0.0);
+        m=m*m;
+        return 42.0*dot(m*m,vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));
+      }
+
+      vec2 warp(vec2 p, float t){
+        float n1=snoise(vec3(p*2.0,t*0.3));
+        float n2=snoise(vec3(p*3.0+50.0,t*0.5));
+        return p+vec2(n1,n2)*0.15;
+      }
+
+      float fbm(vec2 p, float t){
+        float val=0.0;
+        float amp=0.5;
+        for(int i=0;i<5;i++){
+          val+=amp*snoise(vec3(p,t*0.2));
+          p*=2.0;
+          amp*=0.5;
+        }
+        return val;
+      }
+
+      vec3 paletteNuvole(float t, float idx){
+        if(idx<0.5){
+          return mix(vec3(1.0,0.2,0.6),vec3(0.4,0.1,0.6),sin(t*3.0)*0.5+0.5);
+        }else if(idx<1.5){
+          return mix(vec3(1.0,0.8,0.2),vec3(1.0,0.3,0.1),sin(t*2.5)*0.5+0.5);
+        }else if(idx<2.5){
+          return mix(vec3(0.0,0.5,0.9),vec3(0.0,0.9,0.7),sin(t*3.5)*0.5+0.5);
+        }else if(idx<3.5){
+          return mix(vec3(0.7,0.7,0.8),vec3(0.3,0.3,0.4),sin(t*2.0)*0.5+0.5);
+        }else{
+          return vec3(sin(t*5.0)*0.5+0.5,sin(t*5.0+2.1)*0.5+0.5,sin(t*5.0+4.2)*0.5+0.5);
+        }
+      }
+
+      void main(){
+        vec2 uv=vUv;
+        float t=uTime;
+
+        vec2 p=uv*3.0;
+        p=warp(p,t);
+        p=warp(p,t*0.7+100.0);
+
+        float n=fbm(p,t);
+        float n2=fbm(p*1.5+vec2(50.0),t*0.8);
+
+        float densita=0.3+uBass*0.35;
+        float forma=smoothstep(0.3-densita*0.2,0.7+densita*0.3,n);
+
+        float tIdx=floor(uTheme);
+        float tMix=fract(uTheme);
+        vec3 c0=paletteNuvole(n2+uBass,tIdx);
+        vec3 c1=paletteNuvole(n2+uBass,min(tIdx+1.0,4.0));
+        vec3 col=mix(c0,c1,tMix);
+
+        vec4 prev=texture2D(tPrev,uv);
+        vec3 nuovo=col*forma*0.12;
+        vec3 finale=prev.rgb*0.93+nuovo;
+
+        gl_FragColor=vec4(finale,1.0);
+      }
+    `;
+
+    // ============================================
+    // SHADER RADICI — Filamenti Procedurali Reali
+    // ============================================
+    const fsRadici = `
+      precision highp float;
+      uniform sampler2D tPrev;
+      uniform float uTime;
+      uniform float uBeat;
+      uniform float uTreble;
+      uniform float uTheme;
+      varying vec2 vUv;
+
+      float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+      float hash(float n){return fract(sin(n)*43758.5453);}
+
+      vec3 paletteRadici(float t, float idx){
+        if(idx<0.5) return vec3(1.0,0.4,0.7);
+        else if(idx<1.5) return vec3(1.0,0.8,0.0);
+        else if(idx<2.5) return vec3(0.0,0.8,1.0);
+        else if(idx<3.5) return vec3(0.9,0.9,0.9);
+        else return vec3(0.8,0.2,1.0);
+      }
+
+      // Distanza di un punto da un segmento AB
+      float segDist(vec2 p, vec2 a, vec2 b){
+        vec2 pa=p-a;
+        vec2 ba=b-a;
+        float h=clamp(dot(pa,ba)/dot(ba,ba),0.0,1.0);
+        return length(pa-ba*h);
+      }
+
+      // Colore iridescente che scorre lungo il filamento
+      vec3 iridescentColor(float along, float t, float seed){
+        // along: 0.0 = base (centro), 1.0 = punta
+        // Il colore scorre nel tempo come onda
+        float wave1=sin(along*8.0+t*2.0+seed)*0.5+0.5;
+        float wave2=sin(along*12.0-t*1.5+seed*2.0)*0.5+0.5;
+        float wave3=sin(along*6.0+t*3.0+seed*3.0)*0.5+0.5;
+        // Arcobaleno puro: RGB sfasati
+        float r=sin(along*10.0+t*2.0+seed)*0.5+0.5;
+        float g=sin(along*10.0+t*2.0+seed+2.094)*0.5+0.5;
+        float b=sin(along*10.0+t*2.0+seed+4.189)*0.5+0.5;
+        return vec3(r,g,b)*(0.5+wave1*0.5);
+      }
+
+      // Disegna un filamento che parte dal centro con ondulazione
+      // Ritorna vec3: .x = bright, .yz = uv relativo per calcolo colore
+      float drawFilament(vec2 uv, float fi, float t, float beat, float treble, out float alongFilament){
+        float seed=hash(fi*12.34);
+
+        // Angolo di base + ondulazione continua nel tempo
+        float baseAngle=seed*6.28318;
+        float wave1=sin(t*0.5+seed*10.0)*0.25;
+        float wave2=sin(t*1.2+seed*20.0)*0.12;
+        float angle=baseAngle+wave1+wave2;
+
+        // Lunghezza: pulsante col beat
+        float pulse=abs(sin(t*0.4+seed*5.0));
+        float len=(0.15+beat*0.35)*pulse;
+        len=min(len,0.48);
+
+        // Punti del segmento: centro → punta
+        vec2 center=vec2(0.5,0.5);
+        vec2 tip=center+vec2(cos(angle),sin(angle))*len;
+
+        // Ondulazione laterale della punta
+        float perpAngle=angle+1.5708;
+        float wiggle=sin(t*2.0+seed*15.0)*len*0.3*(1.0+treble);
+        tip+=vec2(cos(perpAngle),sin(perpAngle))*wiggle;
+
+        // Distanza dal segmento
+        float d=segDist(uv,center,tip);
+
+        // Calcola posizione lungo il segmento (0=centro, 1=punta)
+        vec2 pa=uv-center;
+        vec2 ba=tip-center;
+        float h=clamp(dot(pa,ba)/dot(ba,ba),0.0,1.0);
+        alongFilament=h;
+
+        // Spessore: piu spesso vicino al centro, sottile alla punta
+        float thick=0.004*(1.0-h*0.5);
+
+        // Luminosita
+        float bright=smoothstep(thick,0.0,d)*(1.0-h*0.3);
+
+        // Glow ampio attorno al filamento
+        float glow=smoothstep(thick*5.0,0.0,d)*0.25;
+
+        return bright+glow;
+      }
+
+      void main(){
+        vec2 uv=vUv;
+        vec4 prev=texture2D(tPrev,uv);
+
+        float t=uTime;
+        float tIdx=floor(uTheme);
+        vec3 baseCol=paletteRadici(t*0.3+uTreble,tIdx);
+
+        // Accumula colore e luminosita separatamente
+        vec3 totalColor=vec3(0.0);
+        float totalBright=0.0;
+
+        // Genera 15 filamenti con semi fissi, ognuno con colore iridescente
+        for(int i=0;i<15;i++){
+          float fi=float(i);
+          float along=0.0;
+          float bright=drawFilament(uv,fi,t,uBeat,uTreble,along);
+          // Colore: mix tra tema base e iridescente
+          vec3 irid=iridescentColor(along,t,fi);
+          vec3 filCol=mix(baseCol,irid,0.6); // 60% iridescente, 40% tema
+          totalColor+=filCol*bright;
+          totalBright+=bright;
+        }
+
+        // Quando c'e un beat: flash di nuovi filamenti temporanei iridescenti
+        if(uBeat>0.5){
+          for(int i=0;i<5;i++){
+            float fi=float(i)+100.0;
+            float seed=hash(fi+t*0.1);
+            float baseAngle=seed*6.28318+uBeat*0.5;
+            float len=(0.1+uBeat*0.2)*abs(sin(t*3.0+seed*10.0));
+            vec2 center=vec2(0.5,0.5);
+            vec2 tip=center+vec2(cos(baseAngle),sin(baseAngle))*len;
+            float d=segDist(uv,center,tip);
+            float bright=smoothstep(0.005,0.0,d);
+            // Flash temporanei: piu puramente iridescenti
+            vec3 irid=iridescentColor(0.5+seed,t,fi);
+            totalColor+=irid*bright*0.8;
+            totalBright+=bright*0.8;
+          }
+        }
+
+        // Accumulo: fade lento per reti persistenti
+        // Il colore finale e la somma di tutti i colori dei filamenti
+        vec3 nuovo=totalColor*0.35;
+        vec3 finale=prev.rgb*0.93+nuovo;
+
+        gl_FragColor=vec4(finale,1.0);
+      }
+    `;
+
+    // ============================================
+    // SHADER MUSCHIO — Crescita Organica ai Bordi (Lichene/Corallo)
+    // ============================================
+    const fsMuschio = `
+      precision highp float;
+      uniform sampler2D tPrev;
+      uniform float uTime;
+      uniform float uTreble;
+      uniform float uVolume;
+      uniform float uTheme;
+      varying vec2 vUv;
+
+      float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7))+uSeed)*43758.5453);}
+
+      float noise2D(vec2 p){
+        vec2 i=floor(p);
+        vec2 f=fract(p);
+        f=f*f*(3.0-2.0*f);
+        float a=hash(i);
+        float b=hash(i+vec2(1.0,0.0));
+        float c=hash(i+vec2(0.0,1.0));
+        float d=hash(i+vec2(1.0,1.0));
+        return mix(mix(a,b,f.x),mix(c,d,f.x),f.y);
+      }
+
+      float fbm(vec2 p, float t){
+        float v=0.0, a=0.5;
+        for(int i=0;i<4;i++){
+          v+=a*noise2D(p+t*0.1);
+          p*=2.0;
+          a*=0.5;
+        }
+        return v;
+      }
+
+      void main(){
+        vec2 uv=vUv;
+        vec4 prev=texture2D(tPrev,uv);
+        float t=uTime;
+
+        // Distanza dai bordi (coordinate originali, stabili)
+        float edgeDist=min(min(uv.x,1.0-uv.x),min(uv.y,1.0-uv.y));
+
+        // Maschera bordi LARGA: il muschio cresce dai bordi verso il centro
+        float edgeMask=smoothstep(0.28,0.0,edgeDist);
+
+        // Irregolarita organica: il bordo non e uniforme
+        float edgeShape=noise2D(uv*4.0+t*0.08);
+        edgeShape=edgeShape*0.5+0.5; // [0,1]
+        edgeMask*=0.3+edgeShape*0.7;
+
+        // Pattern organico che fluisce, reattivo al treble
+        float pattern=fbm(uv*3.0,t*0.2+uTreble);
+
+        // Intensita pulsante con audio
+        float pulse=0.6+sin(t*0.8)*0.2+uVolume*0.6;
+
+        // Muschio: pattern * bordo * pulse, amplificato per visibilita
+        float muschio=pattern*edgeMask*pulse*1.5;
+
+        // Smoothstep morbido con soglia BASSA per massima visibilita
+        float moss=smoothstep(0.08,0.38,muschio);
+
+        // Colore base dal tema (toni lichene/corallo)
+        float tIdx=floor(uTheme);
+        vec3 baseCol;
+        if(tIdx<0.5) baseCol=vec3(0.5,0.85,0.35);      // verde-rosa lichene
+        else if(tIdx<1.5) baseCol=vec3(0.95,0.8,0.25);  // giallo-oro corallo
+        else if(tIdx<2.5) baseCol=vec3(0.3,0.7,0.9);    // ciano-blu umido
+        else if(tIdx<3.5) baseCol=vec3(0.7,0.73,0.7);   // grigio-bianco pietra
+        else baseCol=vec3(0.7,0.35,0.9);                // viola arcobaleno
+
+        // Iridescenza che scorre lungo i bordi
+        float flow=uv.x+uv.y+t*1.5;
+        vec3 irid=vec3(
+          sin(t*2.5+flow*8.0)*0.5+0.5,
+          sin(t*2.5+flow*8.0+2.094)*0.5+0.5,
+          sin(t*2.5+flow*8.0+4.189)*0.5+0.5
+        );
+
+        // Piu iridescenza vicino ai bordi
+        float iridAmt=smoothstep(0.20,0.0,edgeDist)*0.6;
+        vec3 col=mix(baseCol,irid,iridAmt);
+
+        // Accumulo fluido: fade lento come Nuvole/Radici
+        float fade=0.93;
+        vec3 nuovo=col*moss*0.35;
+        vec3 finale=prev.rgb*fade+nuovo;
+
+        gl_FragColor=vec4(finale,1.0);
+      }
+    `;
+
+    // ============================================
+    // SHADER MIXER FINALE
+    // ============================================
+    const fsMixer = `
+      precision mediump float;
+      uniform sampler2D tScene;
+      uniform sampler2D tNuvole;
+      uniform sampler2D tRadici;
+      uniform sampler2D tMuschio;
+      uniform float uNuvole;
+      uniform float uRadici;
+      uniform float uBass;
+      uniform float uSymMode;
+      varying vec2 vUv;
+
+      vec2 applySym(vec2 uv, float mode){
+        if(mode<0.5) return uv;
+        if(mode<1.5) return vec2(abs(uv.x-0.5)+0.5,uv.y);
+        if(mode<2.5) return vec2(uv.x,abs(uv.y-0.5)+0.5);
+        return vec2(abs(uv.x-0.5)+0.5,abs(uv.y-0.5)+0.5);
+      }
+
+      void main(){
+        vec2 uv=vUv;
+        vec2 symUv=applySym(uv,uSymMode);
+        vec3 scene=texture2D(tScene,symUv).rgb;
+        vec3 nuvole=texture2D(tNuvole,symUv).rgb;
+        vec3 radici=texture2D(tRadici,symUv).rgb;
+        vec3 muschio=texture2D(tMuschio,symUv).rgb;
+
+        // Somma strati "effetto" (possono diventare trasparenti)
+        vec3 effetto=scene;
+        effetto+=nuvole*uNuvole*(0.5+uBass*0.35);
+        effetto+=muschio;
+
+        float vig=1.0-length(uv-0.5)*0.3;
+        effetto*=vig;
+
+        // Scala proporzionale se overflow
+        float mx=max(effetto.r,max(effetto.g,effetto.b));
+        if(mx>1.0) effetto/=mx;
+
+        // Bianco = semi-trasparente (solo per effetto)
+        float sat=max(effetto.r,max(effetto.g,effetto.b))-min(effetto.r,min(effetto.g,effetto.b));
+        float whiteness=smoothstep(0.0,0.15,sat);
+        float alpha=mix(0.15,1.0,whiteness);
+
+        // Radici SEMPRE opache, sommate sopra
+        vec3 finale=effetto+radici*uRadici;
+        // Re-clamp dopo aggiunta radici
+        float mx2=max(finale.r,max(finale.g,finale.b));
+        if(mx2>1.0) finale/=mx2;
+
+        gl_FragColor=vec4(finale,alpha);
+      }
+    `;
+
+    // ============================================
+    // SHADER REACTION-DIFFUSION (Gray-Scott)
+    // ============================================
+    const fsRD = `
+      precision mediump float;
+      uniform sampler2D tPrev;
+      uniform float uFeed;
+      uniform float uKill;
+      uniform float uDiffB;
+      uniform float uTime;
+      varying vec2 vUv;
+
+      void main(){
+        float texel=1.0/256.0;
+        vec2 uv=vUv;
+
+        vec4 c=texture2D(tPrev,uv);
+        vec4 n=texture2D(tPrev,uv+vec2(0.0,texel));
+        vec4 s=texture2D(tPrev,uv+vec2(0.0,-texel));
+        vec4 e=texture2D(tPrev,uv+vec2(texel,0.0));
+        vec4 w=texture2D(tPrev,uv+vec2(-texel,0.0));
+
+        vec4 lap=(n+s+e+w)-4.0*c;
+
+        float a=c.r;
+        float b=c.g;
+
+        float diffA=1.0;
+        float diffB=uDiffB;
+
+        float reaction=a*b*b;
+        float newA=a+(diffA*lap.r-reaction+uFeed*(1.0-a))*0.8;
+        float newB=b+(diffB*lap.g+reaction-(uKill+uFeed)*b)*0.8;
+
+        newA=clamp(newA,0.0,1.0);
+        newB=clamp(newB,0.0,1.0);
+
+        gl_FragColor=vec4(newA,newB,0.0,1.0);
+      }
+    `;
+
+    // ============================================
+    // SHADER RD COMPOSITE (mischia scene + pattern)
+    // ============================================
+    const fsRDComposite = `
+      precision mediump float;
+      uniform sampler2D tScene;
+      uniform sampler2D tRD;
+      uniform float uOrganic;
+      uniform float uBass;
+      uniform float uTime;
+      uniform float uTheme;
+      varying vec2 vUv;
+
+      vec3 themeColor(float idx){
+        if(idx<0.5) return vec3(1.0,0.0,0.5);
+        else if(idx<1.5) return vec3(1.0,0.9,0.0);
+        else if(idx<2.5) return vec3(0.0,0.4,1.0);
+        else if(idx<3.5) return vec3(0.8,0.8,0.8);
+        else return vec3(1.0,0.0,1.0);
+      }
+
+      void main(){
+        vec4 scene=texture2D(tScene,vUv);
+        vec4 rd=texture2D(tRD,vUv);
+
+        float tIdx=floor(uTheme);
+        float tNext=min(tIdx+1.0,4.0);
+        float tMix=fract(uTheme);
+        vec3 c0=themeColor(tIdx);
+        vec3 c1=themeColor(tNext);
+        vec3 themeCol=mix(c0,c1,tMix);
+
+        float pattern=rd.g;
+        float intensity=uOrganic*(0.4+uBass*0.15);
+        vec3 rdCol=themeCol*pattern*intensity*1.5;
+        rdCol+=vec3(0.2,0.8,0.6)*pattern*intensity*0.5;
+
+        vec3 final=scene.rgb+rdCol;
+        float vig=1.0-length(vUv-0.5)*0.5;
+        final*=vig;
+
+        gl_FragColor=vec4(final,1.0);
+      }
+    `;
+
+    // ============================================
+    // SHADER ASSURDO (da reaction-diffusion.html)
+    // ============================================
+    const fsAssurdoSim = `
+      precision highp float;
+      uniform sampler2D tPrev;
+      uniform float uTime;
+      uniform float uBass;
+      uniform float uTreble;
+      uniform float uTheme;
+      uniform float uSeed;
+      uniform float uFrame;
+      varying vec2 vUv;
+
+      vec3 mod289(vec3 x){return x-floor(x*(1.0/289.0))*289.0;}
+      vec2 mod289(vec2 x){return x-floor(x*(1.0/289.0))*289.0;}
+      vec3 permute(vec3 x){return mod289(((x*34.0)+1.0)*x);}
+      float snoise(vec2 v){
+        const vec4 C = vec4(0.211324865405187, 0.366025403784439,
+                            -0.577350269189626, 0.024390243902439);
+        vec2 i  = floor(v + dot(v, C.yy));
+        vec2 x0 = v - i + dot(i, C.xx);
+        vec2 i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+        vec4 x12 = x0.xyxy + C.xxzz;
+        x12.xy -= i1;
+        i = mod289(i);
+        vec3 p = permute(permute(i.y + vec3(0.0, i1.y, 1.0)) + i.x + vec3(0.0, i1.x, 1.0));
+        vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,x12.xy), dot(x12.zw,x12.zw)), 0.0);
+        m = m*m; m = m*m;
+        vec3 x = 2.0 * fract(p * C.www) - 1.0;
+        vec3 h = abs(x) - 0.5;
+        vec3 ox = floor(x + 0.5);
+        vec3 a0 = x - ox;
+        m *= 1.79284291400159 - 0.85373472095314 * (a0*a0 + h*h);
+        vec3 g;
+        g.x = a0.x * x0.x + h.x * x0.y;
+        g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+        return 130.0 * dot(m, g);
+      }
+
       vec3 palette(float t, float idx){
-        float tt = t + uTime * 0.3;
+        float tt = t + uTime * 0.3 + uSeed * 0.2;
         float wave = sin(tt * 3.0) * 0.5 + 0.5;
         float wave2 = cos(tt * 7.0 + 1.5) * 0.5 + 0.5;
         float wave3 = sin(tt * 11.0 + 3.0) * 0.5 + 0.5;
-        float chaos = sin(tt * 13.0 * (1.0 + uBass)) * 0.5 + 0.5;
+        float chaos = sin(tt * 13.0) * 0.5 + 0.5;
 
-        // === 1. ROSA caotico ===
-        if(idx<0.5){
+        if(idx < 0.5){
           vec3 hotPink = vec3(1.0, 0.0, 0.5);
           vec3 electricBlue = vec3(0.2, 0.6, 1.0);
           vec3 acidGreen = vec3(0.6, 1.0, 0.2);
           vec3 deepPurple = vec3(0.4, 0.0, 0.8);
-          vec3 peach = vec3(1.0, 0.6, 0.4);
           vec3 mix1 = mix(hotPink, electricBlue, wave);
           vec3 mix2 = mix(acidGreen, deepPurple, wave2);
-          vec3 mix3 = mix(mix1, mix2, wave3);
-          return mix(mix3, peach, chaos * 0.5);
+          return mix(mix1, mix2, wave3);
         }
-        // === 2. GIALLO caotico ===
-        else if(idx<1.5){
+        else if(idx < 1.5){
           vec3 lemon = vec3(1.0, 0.9, 0.0);
           vec3 hotMagenta = vec3(1.0, 0.0, 0.6);
           vec3 toxicGreen = vec3(0.0, 1.0, 0.3);
           vec3 bloodOrange = vec3(1.0, 0.2, 0.0);
-          vec3 skyCyan = vec3(0.0, 0.8, 1.0);
           vec3 mix1 = mix(lemon, hotMagenta, wave);
           vec3 mix2 = mix(toxicGreen, bloodOrange, wave2);
-          vec3 mix3 = mix(mix1, mix2, wave3);
-          return mix(mix3, skyCyan, chaos * 0.4);
+          return mix(mix1, mix2, wave3);
         }
-        // === 3. BLU caotico ===
-        else if(idx<2.5){
+        else if(idx < 2.5){
           vec3 navy = vec3(0.0, 0.1, 0.6);
           vec3 neonCyan = vec3(0.0, 1.0, 1.0);
           vec3 sunsetOrange = vec3(1.0, 0.3, 0.1);
           vec3 laserPink = vec3(1.0, 0.0, 0.8);
-          vec3 iceWhite = vec3(0.8, 0.9, 1.0);
           vec3 mix1 = mix(navy, neonCyan, wave);
           vec3 mix2 = mix(sunsetOrange, laserPink, wave2);
-          vec3 mix3 = mix(mix1, mix2, wave3);
-          return mix(mix3, iceWhite, chaos * 0.3);
+          return mix(mix1, mix2, wave3);
         }
-        // === 4. BIANCO/NERO + grigi psichedelici ===
-        else if(idx<3.5){
+        else if(idx < 3.5){
           float grey = sin(t * 2.0 + uTime * 0.15) * 0.5 + 0.5;
           float tint = sin(t * 8.0 + uTime * 0.5) * 0.5 + 0.5;
           vec3 bw = vec3(grey);
           vec3 neon = vec3(0.0, 1.0, 1.0) * (0.3 + uTreble * 0.7);
           return mix(bw, neon, tint * uTreble * 0.4);
         }
-        // === 5. ARCOBALENO psichedelico ===
         else {
           float r = sin(t * 6.0 + uTime * 0.4) * 0.5 + 0.5;
           float g = sin(t * 6.0 + uTime * 0.4 + 2.094) * 0.5 + 0.5;
           float b = sin(t * 6.0 + uTime * 0.4 + 4.189) * 0.5 + 0.5;
-          float boost = 0.7 + uBass * 0.6;
-          return vec3(r, g, b) * boost;
+          return vec3(r, g, b) * (0.7 + uTreble * 0.6);
         }
       }
+
       void main(){
-        float t=length(vP)*0.5+vDisp*2.0+uTime*0.05;
-        float i0=floor(uTheme); float i1=i0+1.0; float mf=fract(uTheme);
-        vec3 c0=palette(t,i0); vec3 c1=palette(t,min(i1,3.0));
-        vec3 base=mix(c0,c1,mf);
-        vec3 vd=normalize(vec3(0.0,0.0,3.0)-vP);
-        float fr=pow(1.0-max(dot(normalize(vN),vd),0.0),3.0);
-        vec3 final=base*(0.8+vDisp*2.0)+vec3(fr*0.5);
-        gl_FragColor=vec4(final,1.0);
+        if(uFrame < 20.0){
+          float n = snoise(vUv * 8.0 + uSeed);
+          if(n > 0.4){
+            float tIdx = floor(uTheme);
+            vec3 col = palette(vUv.x + vUv.y + uSeed * 0.1, tIdx);
+            gl_FragColor = vec4(col * 0.8, 1.0);
+          } else {
+            gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+          }
+          return;
+        }
+
+        float zoomAmt = 0.995 - uBass * 0.003;
+        vec2 centered = (vUv - 0.5) * zoomAmt + 0.5;
+
+        vec3 prevCol = texture2D(tPrev, centered).rgb * 0.5;
+        prevCol += texture2D(tPrev, centered + vec2(0.001, 0.0)).rgb * 0.125;
+        prevCol += texture2D(tPrev, centered - vec2(0.001, 0.0)).rgb * 0.125;
+        prevCol += texture2D(tPrev, centered + vec2(0.0, 0.001)).rgb * 0.125;
+        prevCol += texture2D(tPrev, centered - vec2(0.0, 0.001)).rgb * 0.125;
+
+        float fade = 0.90 + uTreble * 0.04;
+        prevCol *= fade;
+
+        vec2 mUV = vUv;
+        mUV.x = abs(mUV.x - 0.5) * 2.0;
+        mUV.y = abs(mUV.y - 0.5) * 2.0;
+
+        float flowScale = 4.0 + uBass * 3.0;
+        float fx = snoise(mUV * flowScale + uTime * 0.2 + uSeed) * 0.04;
+        float fy = snoise(mUV * flowScale + 100.0 + uTime * 0.2 + uSeed) * 0.04;
+        vec2 distorted = mUV + vec2(fx, fy);
+
+        float n1 = snoise(distorted * 3.0 + uTime * 0.15);
+        float n2 = snoise(distorted * 6.0 - uTime * 0.1);
+        float n3 = snoise(distorted * 1.5 + uTime * 0.05);
+
+        float structure = n1 * 0.5 + n2 * 0.3 + n3 * 0.2;
+        structure = smoothstep(-0.2, 0.6, structure);
+
+        float tIdx = floor(uTheme);
+        float palT = structure * 2.0 + uTime * 0.1;
+        vec3 newCol = palette(palT, tIdx);
+
+        newCol += newCol * pow(structure, 3.0) * 2.0;
+        newCol = mix(vec3(0.02), newCol, 0.5 + uBass * 0.5);
+
+        float blendAmt = 0.25 + uBass * 0.15;
+        vec3 finalCol = mix(prevCol, newCol, blendAmt);
+
+        if(uBass > 0.6){
+          float flash = smoothstep(0.6, 0.9, uBass);
+          finalCol += vec3(flash * 0.3);
+        }
+
+        gl_FragColor = vec4(finalCol, 1.0);
       }
     `;
 
-    function createParticles() {
-      const count = 2000;
-      particles = new THREE.BufferGeometry();
-      particlePositions = new Float32Array(count * 3);
-      particleColors = new Float32Array(count * 3);
-      particlePhases = new Float32Array(count);
-      
-      for (let i = 0; i < count; i++) {
-        const theta = Math.random() * Math.PI * 2;
-        const phi = Math.acos(2 * Math.random() - 1);
-        const r = 1.3 + Math.random() * 2.5;
-        particlePositions[i*3] = r * Math.sin(phi) * Math.cos(theta);
-        particlePositions[i*3+1] = r * Math.sin(phi) * Math.sin(theta);
-        particlePositions[i*3+2] = r * Math.cos(phi);
-        particleColors[i*3] = 0.05;
-        particleColors[i*3+1] = 0.05;
-        particleColors[i*3+2] = 0.08;
-        particlePhases[i] = Math.random() * Math.PI * 2;
-      }
-      
-      particles.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
-      particles.setAttribute('color', new THREE.BufferAttribute(particleColors, 3));
-      
-      const pMat = new THREE.PointsMaterial({
-        size: 0.04,
-        vertexColors: true,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-        transparent: true,
-        opacity: 0.9,
-        sizeAttenuation: true
-      });
-      
-      particleSystem = new THREE.Points(particles, pMat);
-      scene.add(particleSystem);
-    }
+    const fsAssurdoComposite = `
+      precision mediump float;
+      uniform sampler2D tScene;
+      uniform sampler2D tAssurdo;
+      uniform float uAssurdo;
+      uniform float uBass;
+      varying vec2 vUv;
 
+      void main(){
+        vec3 scene = texture2D(tScene, vUv).rgb;
+        vec3 assurdo = texture2D(tAssurdo, vUv).rgb;
+        float flash = 0.5 + uBass * 0.5;
+        vec3 mixed = mix(scene, scene + assurdo * flash, uAssurdo);
+
+        // Scala proporzionale se overflow
+        float mx = max(mixed.r, max(mixed.g, mixed.b));
+        if(mx > 1.0) mixed /= mx;
+
+        // Bianco = semi-trasparente
+        float sat = max(mixed.r, max(mixed.g, mixed.b)) - min(mixed.r, min(mixed.g, mixed.b));
+        float whiteness = smoothstep(0.0, 0.15, sat);
+        float alpha = mix(0.15, 1.0, whiteness);
+
+        gl_FragColor = vec4(mixed, alpha);
+      }
+    `;
+
+    // ============================================
+    // INIZIALIZZAZIONE
+    // ============================================
     function init(){
-      scene=new THREE.Scene(); scene.background=new THREE.Color(0x050505);
-      camera=new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 100);
-      camera.position.z=3;
       renderer=new THREE.WebGLRenderer({antialias:true});
-      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setSize(window.innerWidth,window.innerHeight);
       renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+      renderer.domElement.style.background='#000';
       document.getElementById('canvas-container').appendChild(renderer.domElement);
 
+      scene=new THREE.Scene();
+      camera=new THREE.PerspectiveCamera(60,window.innerWidth/window.innerHeight,0.1,100);
+      camera.position.z=3;
+
+      // Sfera 256x256
       matSolid=new THREE.ShaderMaterial({
         uniforms:{uTime:{value:0},uBass:{value:0},uTreble:{value:0},uTheme:{value:0}},
-        vertexShader:vs, fragmentShader:fs, side:THREE.DoubleSide
+        vertexShader:vsMain,fragmentShader:fsMain,side:THREE.DoubleSide
       });
+      let geo=new THREE.SphereGeometry(1,256,256);
+      mainMesh=new THREE.Mesh(geo,matSolid); scene.add(mainMesh);
 
-      let g=new THREE.SphereGeometry(1,128,128);
-      meshSolid=new THREE.Mesh(g, matSolid);
-      scene.add(meshSolid);
-
-      matWire=matSolid.clone();
-      matWire.wireframe=true;
-      meshWire=new THREE.Mesh(g, matWire);
-      meshWire.visible=false;
-      scene.add(meshWire);
-
+      // Particelle
       createParticles();
 
-      window.addEventListener('resize', () => {
-        camera.aspect=window.innerWidth/window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
+      // --- PING-PONG SETUP ---
+      const w=window.innerWidth, h=window.innerHeight;
+      const rtOpts={
+        minFilter:THREE.LinearFilter, magFilter:THREE.LinearFilter,
+        format:THREE.RGBAFormat, type:THREE.UnsignedByteType
+      };
+      rtA=new THREE.WebGLRenderTarget(w,h,rtOpts);
+      rtB=new THREE.WebGLRenderTarget(w,h,rtOpts);
+
+      orthoCamera=new THREE.OrthographicCamera(-1,1,1,-1,0,1);
+      const planeGeo=new THREE.PlaneGeometry(2,2);
+
+      // Feedback: applica zoom+blur+fade al frame precedente
+      feedbackScene=new THREE.Scene();
+      feedbackMat=new THREE.ShaderMaterial({
+        uniforms:{
+          tDiffuse:{value:null},
+          uZoom:{value:0.998},
+          uFade:{value:0.97},
+          uBlur:{value:0.8}
+        },
+        vertexShader:vsFeedback,fragmentShader:fsFeedback,
+        depthWrite:false
       });
+      feedbackScene.add(new THREE.Mesh(planeGeo,feedbackMat));
+
+      // Display: mostra il composito finale sullo schermo
+      displayScene=new THREE.Scene();
+      displayMat=new THREE.ShaderMaterial({
+        uniforms:{tDiffuse:{value:null}},
+        vertexShader:vsDisplay,fragmentShader:fsDisplay,
+        depthWrite:false
+      });
+      displayScene.add(new THREE.Mesh(planeGeo,displayMat));
+
+      // --- NUVOLE SETUP ---
+      rtNuvoleA=new THREE.WebGLRenderTarget(w,h,rtOpts);
+      rtNuvoleB=new THREE.WebGLRenderTarget(w,h,rtOpts);
+      nuvoleScene=new THREE.Scene();
+      nuvoleMat=new THREE.ShaderMaterial({
+        uniforms:{tPrev:{value:null},uTime:{value:0},uBass:{value:0},uTheme:{value:0}},
+        vertexShader:vsFeedback,fragmentShader:fsNuvole,
+        depthWrite:false
+      });
+      nuvoleScene.add(new THREE.Mesh(planeGeo,nuvoleMat));
+
+      // --- RADICI SETUP ---
+      rtRadiciA=new THREE.WebGLRenderTarget(w,h,rtOpts);
+      rtRadiciB=new THREE.WebGLRenderTarget(w,h,rtOpts);
+      radiciScene=new THREE.Scene();
+      radiciMat=new THREE.ShaderMaterial({
+        uniforms:{tPrev:{value:null},uTime:{value:0},uBeat:{value:0},uTreble:{value:0},uTheme:{value:0}},
+        vertexShader:vsFeedback,fragmentShader:fsRadici,
+        depthWrite:false
+      });
+      radiciScene.add(new THREE.Mesh(planeGeo,radiciMat));
+
+      // --- MUSCHIO SETUP ---
+      rtMuschioA=new THREE.WebGLRenderTarget(w,h,rtOpts);
+      rtMuschioB=new THREE.WebGLRenderTarget(w,h,rtOpts);
+      muschioScene=new THREE.Scene();
+      muschioMat=new THREE.ShaderMaterial({
+        uniforms:{tPrev:{value:null},uTime:{value:0},uTreble:{value:0},uVolume:{value:0},uTheme:{value:0}},
+        vertexShader:vsFeedback,fragmentShader:fsMuschio,
+        depthWrite:false
+      });
+      muschioScene.add(new THREE.Mesh(planeGeo,muschioMat));
+
+      // --- MIXER FINALE ---
+      mixerScene=new THREE.Scene();
+      mixerMat=new THREE.ShaderMaterial({
+        uniforms:{
+          tScene:{value:null},tNuvole:{value:null},tRadici:{value:null},tMuschio:{value:null},
+          uNuvole:{value:0},uRadici:{value:0},uBass:{value:0},uSymMode:{value:0}
+        },
+        vertexShader:vsDisplay,fragmentShader:fsMixer,
+        depthWrite:false
+      });
+      mixerScene.add(new THREE.Mesh(planeGeo,mixerMat));
+
+      // --- REACTION-DIFFUSION SETUP ---
+      rdA=new THREE.WebGLRenderTarget(w,h,rtOpts);
+      rdB=new THREE.WebGLRenderTarget(w,h,rtOpts);
+
+      rdSimScene=new THREE.Scene();
+      rdSimMat=new THREE.ShaderMaterial({
+        uniforms:{
+          tPrev:{value:null},
+          uFeed:{value:0.054},
+          uKill:{value:0.063},
+          uDiffB:{value:0.5},
+          uTime:{value:0}
+        },
+        vertexShader:vsFeedback,
+        fragmentShader:fsRD,
+        depthWrite:false
+      });
+      rdSimScene.add(new THREE.Mesh(planeGeo,rdSimMat));
+
+      rdCompositeScene=new THREE.Scene();
+      rdCompositeMat=new THREE.ShaderMaterial({
+        uniforms:{
+          tScene:{value:null},
+          tRD:{value:null},
+          uOrganic:{value:0},
+          uBass:{value:0},
+          uTime:{value:0},
+          uTheme:{value:0}
+        },
+        vertexShader:vsDisplay,
+        fragmentShader:fsRDComposite,
+        depthWrite:false
+      });
+      rdCompositeScene.add(new THREE.Mesh(planeGeo,rdCompositeMat));
+
+      // Inizializza stato RD con seme centrale + macchie random
+      (function initRD(){
+        const rdCanvas=document.createElement('canvas');
+        rdCanvas.width=512; rdCanvas.height=512;
+        const ctx=rdCanvas.getContext('2d');
+        const imgData=ctx.createImageData(512,512);
+        const d=imgData.data;
+        for(let i=0;i<512*512;i++){
+          const x=i%512, y=Math.floor(i/512);
+          const dx=x-256, dy=y-256;
+          const dist=Math.sqrt(dx*dx+dy*dy);
+          let a=0.0, b=0.0;
+          if(dist<20){a=1.0;b=1.0;}
+          else if(Math.random()<0.003){a=1.0;b=1.0;}
+          d[i*4]=Math.floor(a*255);
+          d[i*4+1]=Math.floor(b*255);
+          d[i*4+2]=0;
+          d[i*4+3]=255;
+        }
+        ctx.putImageData(imgData,0,0);
+        const tex=new THREE.CanvasTexture(rdCanvas);
+        tex.minFilter=THREE.LinearFilter;
+        tex.magFilter=THREE.LinearFilter;
+        const initMat=new THREE.ShaderMaterial({
+          uniforms:{tSeed:{value:tex}},
+          vertexShader:vsDisplay,
+          fragmentShader:`
+            precision mediump float;
+            uniform sampler2D tSeed;
+            varying vec2 vUv;
+            void main(){gl_FragColor=texture2D(tSeed,vUv);}
+          `,
+          depthWrite:false
+        });
+        const initScene=new THREE.Scene();
+        initScene.add(new THREE.Mesh(planeGeo,initMat));
+        renderer.setRenderTarget(rdA);
+        renderer.render(initScene,orthoCamera);
+        renderer.setRenderTarget(null);
+      })();
+
+      // --- ASSURDO SETUP ---
+      rtAssurdoA=new THREE.WebGLRenderTarget(w,h,rtOpts);
+      rtAssurdoB=new THREE.WebGLRenderTarget(w,h,rtOpts);
+
+      assurdoSimScene=new THREE.Scene();
+      assurdoSimMat=new THREE.ShaderMaterial({
+        uniforms:{
+          tPrev:{value:null},
+          uTime:{value:0},
+          uBass:{value:0},
+          uTreble:{value:0},
+          uTheme:{value:0},
+          uSeed:{value:42.0},
+          uFrame:{value:0}
+        },
+        vertexShader:vsFeedback,
+        fragmentShader:fsAssurdoSim,
+        depthWrite:false
+      });
+      assurdoSimScene.add(new THREE.Mesh(planeGeo,assurdoSimMat));
+
+      assurdoCompositeScene=new THREE.Scene();
+      assurdoCompositeMat=new THREE.ShaderMaterial({
+        uniforms:{
+          tScene:{value:null},
+          tAssurdo:{value:null},
+          uAssurdo:{value:0},
+          uBass:{value:0},
+          uTime:{value:0},
+          uTheme:{value:0}
+        },
+        vertexShader:vsDisplay,
+        fragmentShader:fsAssurdoComposite,
+        depthWrite:false
+      });
+      assurdoCompositeScene.add(new THREE.Mesh(planeGeo,assurdoCompositeMat));
+
+      // Inizializza stato Assurdo con canvas seme
+      (function initAssurdo(){
+        const asCanvas=document.createElement('canvas');
+        asCanvas.width=512; asCanvas.height=512;
+        const ctx=asCanvas.getContext('2d');
+        const imgData=ctx.createImageData(512,512);
+        const d=imgData.data;
+        for(let i=0;i<512*512;i++){
+          const x=i%512, y=Math.floor(i/512);
+          const dx=x-256, dy=y-256;
+          const dist=Math.sqrt(dx*dx+dy*dy);
+          if(dist<30 || Math.random()<0.005){
+            d[i*4]=255; d[i*4+1]=255; d[i*4+2]=255; d[i*4+3]=255;
+          }else{
+            d[i*4]=0; d[i*4+1]=0; d[i*4+2]=0; d[i*4+3]=255;
+          }
+        }
+        ctx.putImageData(imgData,0,0);
+        const tex=new THREE.CanvasTexture(asCanvas);
+        tex.minFilter=THREE.LinearFilter;
+        tex.magFilter=THREE.LinearFilter;
+        const initMat=new THREE.ShaderMaterial({
+          uniforms:{tSeed:{value:tex}},
+          vertexShader:vsDisplay,
+          fragmentShader:`
+            precision mediump float;
+            uniform sampler2D tSeed;
+            varying vec2 vUv;
+            void main(){gl_FragColor=texture2D(tSeed,vUv);}
+          `,
+          depthWrite:false
+        });
+        const initScene=new THREE.Scene();
+        initScene.add(new THREE.Mesh(planeGeo,initMat));
+        renderer.setRenderTarget(rtAssurdoA);
+        renderer.render(initScene,orthoCamera);
+        renderer.setRenderTarget(null);
+      })();
+
+      // Inizializza tutti i render target organici a nero
+      const blackMat=new THREE.MeshBasicMaterial({color:0x000000});
+      const blackScene=new THREE.Scene();
+      blackScene.add(new THREE.Mesh(planeGeo,blackMat));
+
+      renderer.setRenderTarget(rtNuvoleA); renderer.render(blackScene,orthoCamera);
+      renderer.setRenderTarget(rtNuvoleB); renderer.render(blackScene,orthoCamera);
+      renderer.setRenderTarget(rtRadiciA); renderer.render(blackScene,orthoCamera);
+      renderer.setRenderTarget(rtRadiciB); renderer.render(blackScene,orthoCamera);
+      renderer.setRenderTarget(rtMuschioA); renderer.render(blackScene,orthoCamera);
+      renderer.setRenderTarget(rtMuschioB); renderer.render(blackScene,orthoCamera);
+
+      renderer.setRenderTarget(null);
+
+      window.addEventListener('resize',onResize);
     }
 
+    function onResize(){
+      const w=window.innerWidth, h=window.innerHeight;
+      camera.aspect=w/h; camera.updateProjectionMatrix();
+      renderer.setSize(w,h);
+      rtA.setSize(w,h); rtB.setSize(w,h);
+      rtNuvoleA.setSize(w,h); rtNuvoleB.setSize(w,h);
+      rtRadiciA.setSize(w,h); rtRadiciB.setSize(w,h);
+      rtMuschioA.setSize(w,h); rtMuschioB.setSize(w,h);
+      rdA.setSize(w,h); rdB.setSize(w,h);
+      rtAssurdoA.setSize(w,h); rtAssurdoB.setSize(w,h);
+    }
+
+    // ============================================
+    // PARTICELLE 3000
+    // ============================================
+    function createParticles(){
+      const count=3000;
+      particles=new THREE.BufferGeometry();
+      particlePositions=new Float32Array(count*3);
+      particleColors=new Float32Array(count*3);
+      particlePhases=new Float32Array(count);
+      for(let i=0;i<count;i++){
+        const theta=Math.random()*Math.PI*2;
+        const phi=Math.acos(2*Math.random()-1);
+        const r=1.4+Math.random()*2.8;
+        particlePositions[i*3]=r*Math.sin(phi)*Math.cos(theta);
+        particlePositions[i*3+1]=r*Math.sin(phi)*Math.sin(theta);
+        particlePositions[i*3+2]=r*Math.cos(phi);
+        particleColors[i*3]=0.03; particleColors[i*3+1]=0.03; particleColors[i*3+2]=0.05;
+        particlePhases[i]=Math.random()*Math.PI*2;
+      }
+      particles.setAttribute('position',new THREE.BufferAttribute(particlePositions,3));
+      particles.setAttribute('color',new THREE.BufferAttribute(particleColors,3));
+      const pMat=new THREE.PointsMaterial({
+        size:0.035,vertexColors:true,blending:THREE.AdditiveBlending,
+        depthWrite:false,transparent:true,opacity:0.9,sizeAttenuation:true
+      });
+      particleSystem=new THREE.Points(particles,pMat); scene.add(particleSystem);
+    }
+
+    // ============================================
+    // AUDIO
+    // ============================================
     function loadAudio(file){
       audioEl=document.createElement('audio');
       audioEl.src=URL.createObjectURL(file);
       audioEl.crossOrigin='anonymous';
       audioEl.loop=true;
-      audioCtx=new (window.AudioContext||window.webkitAudioContext)();
-      let src=audioCtx.createMediaElementSource(audioEl);
-      analyser=audioCtx.createAnalyser(); analyser.fftSize=512;
-      src.connect(analyser); analyser.connect(audioCtx.destination);
-      audioEl.play();
+      audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+      const src=audioCtx.createMediaElementSource(audioEl);
+      analyser=audioCtx.createAnalyser(); analyser.fftSize=2048;
+      audioDestination=audioCtx.createMediaStreamDestination();
+      src.connect(analyser);
+      analyser.connect(audioCtx.destination);
+      analyser.connect(audioDestination);
+      audioEl.play(); isPlaying=true;
       document.getElementById('file-name').textContent=file.name;
       document.getElementById('btn-load').style.display='none';
+      document.getElementById('btn-play').style.display='inline-block';
+      document.getElementById('btn-play').textContent='Pause';
       document.getElementById('btn-change').style.display='inline-block';
     }
 
     function getAudio(){
-      if(!analyser||!audioCtx) return {bass:0, treble:0};
-      let data=new Uint8Array(analyser.frequencyBinCount);
+      if(!analyser||!audioCtx) return{bass:0,treble:0,beat:0};
+      const data=new Uint8Array(analyser.frequencyBinCount);
       analyser.getByteFrequencyData(data);
-      let nyq=audioCtx.sampleRate/2, bins=analyser.frequencyBinCount, fpb=nyq/bins;
-      let bEnd=Math.min(Math.floor(100/fpb),bins), bSum=0;
+      const nyq=audioCtx.sampleRate/2, bins=analyser.frequencyBinCount, fpb=nyq/bins;
+      const bEnd=Math.min(Math.floor(150/fpb),bins); let bSum=0;
       for(let i=0;i<bEnd;i++) bSum+=data[i];
-      let bass=bSum/Math.max(bEnd*255,1);
-      let tSt=Math.min(Math.floor(2000/fpb),bins), tEn=Math.min(Math.floor(8000/fpb),bins), tSum=0;
+        const bass=(bSum/Math.max(bEnd*255,1))*1.5;
+      const tSt=Math.min(Math.floor(2000/fpb),bins);
+      const tEn=Math.min(Math.floor(8000/fpb),bins); let tSum=0;
       for(let i=tSt;i<tEn;i++) tSum+=data[i];
-      let treble=tSum/Math.max((tEn-tSt)*255,1);
-      return {bass, treble};
+      const treble=(tSum/Math.max((tEn-tSt)*255,1))*0.6;
+      const beat=bass>0.6?bass:0;
+      return{bass,treble,beat};
     }
 
+    // ============================================
+    // UI
+    // ============================================
     function makeEq(){
-      let c=document.getElementById('equalizer');
-      for(let i=0;i<8;i++){ let b=document.createElement('div'); b.className='eq-bar'; b.style.height='2px'; c.appendChild(b); eqBars.push(b); }
+      const c=document.getElementById('equalizer');
+      for(let i=0;i<8;i++){const b=document.createElement('div');b.className='eq-bar';b.style.height='2px';c.appendChild(b);eqBars.push(b);}
     }
-    function updateEq(){
+    function updateEq(dataArray){
       if(!analyser) return;
-      let data=new Uint8Array(analyser.frequencyBinCount); analyser.getByteFrequencyData(data);
-      let bpb=Math.floor(data.length/eqBars.length);
+      const bpb=Math.floor(dataArray.length/eqBars.length);
       for(let i=0;i<eqBars.length;i++){
-        let s=0; for(let j=0;j<bpb;j++) s+=data[i*bpb+j];
+        let s=0; for(let j=0;j<bpb;j++) s+=dataArray[i*bpb+j];
         eqBars[i].style.height=Math.max(2,(s/bpb/255)*30)+'px';
       }
     }
 
+    function updateSymmetry(){
+      let mode=0;
+      if(symmetryActive && symmetryVertical) mode=3;
+      else if(symmetryVertical) mode=2;
+      else if(symmetryActive) mode=1;
+      mixerMat.uniforms.uSymMode.value=mode;
+    }
+
     function setupUI(){
-      let audIn=document.getElementById('audio-input');
-      let btnLoad=document.getElementById('btn-load');
-      let btnChg=document.getElementById('btn-change');
-      let btnWire=document.getElementById('btn-wire');
-      let sldThm=document.getElementById('slider-theme');
-      let lblThm=document.getElementById('theme-label');
+      const audIn=document.getElementById('audio-input');
+      const btnLoad=document.getElementById('btn-load');
+      const btnPlay=document.getElementById('btn-play');
+      const btnChange=document.getElementById('btn-change');
+      const sldThm=document.getElementById('slider-theme');
+      const lblThm=document.getElementById('theme-label');
 
       btnLoad.addEventListener('click',()=> audIn.click());
-      btnChg.addEventListener('click',()=> { if(audioEl){audioEl.pause();audioEl=null;} audIn.value=''; audIn.click(); });
-      audIn.addEventListener('change',(e)=> { let f=e.target.files[0]; if(f) loadAudio(f); });
-      sldThm.addEventListener('input',(e)=> { let v=parseFloat(e.target.value);         lblThm.textContent=themeNames[Math.min(Math.round(v),4)]; });
+      btnPlay.addEventListener('click',()=>{
+        if(!audioEl) return;
+        if(isPlaying){audioEl.pause();btnPlay.textContent='Play';}
+        else{audioEl.play();btnPlay.textContent='Pause';}
+        isPlaying=!isPlaying;
+      });
+      btnChange.addEventListener('click',()=>{
+        if(audioEl){audioEl.pause();audioEl=null;}
+        audIn.value=''; audIn.click();
+      });
+      audIn.addEventListener('change',(e)=>{const f=e.target.files[0]; if(f) loadAudio(f);});
+      sldThm.addEventListener('input',(e)=>{
+        const v=parseFloat(e.target.value);
+        lblThm.textContent=themeNames[Math.min(Math.round(v),4)];
+      });
 
-      let wireOn=false;
-      btnWire.addEventListener('click',()=> {
-        wireOn=!wireOn;
-        meshSolid.visible=!wireOn;
-        meshWire.visible=wireOn;
-        btnWire.textContent=wireOn?'Piena':'Wireframe';
-        btnWire.style.borderColor=wireOn?'#f0f':'#0ff';
-        btnWire.style.color=wireOn?'#f0f':'#0ff';
+      const sldNuvole=document.getElementById('slider-nuvole');
+      const lblNuvole=document.getElementById('nuvole-label');
+      sldNuvole.addEventListener('input',(e)=>{
+        const v=parseFloat(e.target.value);
+        lblNuvole.textContent=Math.round(v*100)+'%';
+      });
+
+      const sldRadici=document.getElementById('slider-radici');
+      const lblRadici=document.getElementById('radici-label');
+      sldRadici.addEventListener('input',(e)=>{
+        const v=parseFloat(e.target.value);
+        lblRadici.textContent=Math.round(v*100)+'%';
+      });
+
+      // Slider Organicità (Reaction-Diffusion)
+      const sldOrg=document.getElementById('slider-organic');
+      const lblOrg=document.getElementById('organic-label');
+      sldOrg.addEventListener('input',(e)=>{
+        const v=parseFloat(e.target.value);
+        lblOrg.textContent=Math.round(v*100)+'%';
+      });
+
+      // Slider Assurdo (reaction-diffusion overlay)
+      const sldAssurdo=document.getElementById('slider-assurdo');
+      const lblAssurdo=document.getElementById('assurdo-label');
+      sldAssurdo.addEventListener('input',(e)=>{
+        const v=parseFloat(e.target.value);
+        lblAssurdo.textContent=Math.round(v*100)+'%';
+      });
+
+      // Simmetria orizzontale
+      const btnSym=document.getElementById('btn-symmetry');
+      btnSym.addEventListener('click',()=>{
+        symmetryActive=!symmetryActive;
+        updateSymmetry();
+        btnSym.textContent=symmetryActive?'H-Sym ON':'H-Sym';
+        btnSym.style.background=symmetryActive?'rgba(0,255,255,0.35)':'rgba(0,255,255,0.08)';
+      });
+
+      // Simmetria verticale
+      const btnSymV=document.getElementById('btn-symmetry-v');
+      btnSymV.addEventListener('click',()=>{
+        symmetryVertical=!symmetryVertical;
+        updateSymmetry();
+        btnSymV.textContent=symmetryVertical?'V-Sym ON':'V-Sym';
+        btnSymV.style.background=symmetryVertical?'rgba(0,255,255,0.35)':'rgba(0,255,255,0.08)';
+      });
+
+      // Menu toggle
+      const btnMenu=document.getElementById('btn-menu');
+      const uiOverlay=document.getElementById('ui-overlay');
+      btnMenu.addEventListener('click',()=>{
+        uiOverlay.classList.toggle('collapsed');
+        btnMenu.textContent=uiOverlay.classList.contains('collapsed')?'\u2630 MENU':'\u2715 CLOSE';
+      });
+
+      // Randomize
+      const btnRandom=document.getElementById('btn-random');
+      btnRandom.addEventListener('click',()=>{
+        const sliders=[
+          {id:'slider-theme',label:'theme-label'},
+          {id:'slider-nuvole',label:'nuvole-label'},
+          {id:'slider-radici',label:'radici-label'},
+          {id:'slider-organic',label:'organic-label'},
+          {id:'slider-assurdo',label:'assurdo-label'}
+        ];
+        sliders.forEach(s=>{
+          const slider=document.getElementById(s.id);
+          const label=document.getElementById(s.label);
+          const v=Math.random();
+          slider.value=v;
+          if(s.id==='slider-theme'){
+            label.textContent=themeNames[Math.min(Math.round(v),4)];
+          }else{
+            label.textContent=Math.round(v*100)+'%';
+          }
+          slider.dispatchEvent(new Event('input'));
+        });
+      });
+
+      // Record & Export
+      const btnRecord=document.getElementById('btn-record');
+      btnRecord.addEventListener('click',()=>{
+        if(!isRecording) startRecording(); else stopRecording();
       });
 
       makeEq();
-      document.addEventListener('click',()=> { if(audioCtx&&audioCtx.state==='suspended') audioCtx.resume(); },{once:true});
+      document.addEventListener('click',()=>{if(audioCtx&&audioCtx.state==='suspended') audioCtx.resume();},{once:true});
     }
 
+    // ============================================
+    // RECORDING & EXPORT
+    // ============================================
+    function startRecording(){
+      if(isRecording) return;
+      const canvas=document.querySelector('#canvas-container canvas');
+      if(!canvas) return;
+
+      let canvasStream;
+      try{
+        canvasStream=canvas.captureStream(60);
+      }catch(e){
+        console.error('captureStream non supportato:',e);
+        alert('La registrazione non è supportata su questo browser.');
+        return;
+      }
+
+      const tracks=[...canvasStream.getVideoTracks()];
+
+      if(audioDestination&&audioDestination.stream&&audioDestination.stream.getAudioTracks().length>0){
+        tracks.push(...audioDestination.stream.getAudioTracks());
+      }
+
+      const combinedStream=new MediaStream(tracks);
+
+      const options={ mimeType: 'video/webm;codecs=vp9,opus', videoBitsPerSecond: 8000000 };
+      if(!MediaRecorder.isTypeSupported(options.mimeType)){
+        options.mimeType='video/webm;codecs=vp8,opus';
+      }
+      if(!MediaRecorder.isTypeSupported(options.mimeType)){
+        options.mimeType='video/webm';
+      }
+
+      try{
+        mediaRecorder=new MediaRecorder(combinedStream,options);
+      }catch(e){
+        console.error('Errore creazione MediaRecorder:',e);
+        alert('Errore avvio registrazione. Prova un altro browser.');
+        return;
+      }
+
+      recordedChunks=[];
+      mediaRecorder.ondataavailable=(e)=>{
+        if(e.data.size>0) recordedChunks.push(e.data);
+      };
+
+      mediaRecorder.onstop=()=>{
+        const blob=new Blob(recordedChunks,{type:'video/webm'});
+        const url=URL.createObjectURL(blob);
+        const a=document.createElement('a');
+        a.style.display='none';
+        a.href=url;
+        const dateStr=new Date().toISOString().slice(0,19).replace(/:/g,'-');
+        a.download=`nature-visual-${dateStr}.webm`;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(()=>{document.body.removeChild(a); URL.revokeObjectURL(url);},100);
+      };
+
+      mediaRecorder.start(1000);
+      isRecording=true;
+      recordingStartTime=Date.now();
+
+      const btnRecord=document.getElementById('btn-record');
+      btnRecord.classList.add('recording');
+      btnRecord.innerHTML='⏹ Stop & Export';
+      document.getElementById('rec-status').style.display='block';
+
+      recordingTimer=setInterval(()=>{
+        const elapsed=Math.floor((Date.now()-recordingStartTime)/1000);
+        document.getElementById('rec-time').textContent=elapsed+'s';
+      },1000);
+    }
+
+    function stopRecording(){
+      if(!isRecording||!mediaRecorder) return;
+      mediaRecorder.stop();
+      isRecording=false;
+      clearInterval(recordingTimer);
+
+      const btnRecord=document.getElementById('btn-record');
+      btnRecord.classList.remove('recording');
+      btnRecord.innerHTML='⏮ Record';
+      document.getElementById('rec-status').style.display='none';
+    }
+
+    // ============================================
+    // LOOP + PING-PONG + STRATI ORGANICI
+    // ============================================
     function animate(time){
       requestAnimationFrame(animate);
-      let t=time*0.001;
+      const elapsed=time*0.001;
 
-      matSolid.uniforms.uTime.value=t;
-      if(matWire) matWire.uniforms.uTime.value=t;
-
-      let a={bass:0,treble:0};
+      // Audio
+      let a={bass:0,treble:0,beat:0};
+      let freqData=null;
       if(analyser){
         a=getAudio();
-        matSolid.uniforms.uBass.value+=(a.bass-matSolid.uniforms.uBass.value)*0.15;
-        matSolid.uniforms.uTreble.value+=(a.treble-matSolid.uniforms.uTreble.value)*0.2;
-        if(matWire){
-          matWire.uniforms.uBass.value=matSolid.uniforms.uBass.value;
-          matWire.uniforms.uTreble.value=matSolid.uniforms.uTreble.value;
-        }
-        updateEq();
+        freqData=new Uint8Array(analyser.frequencyBinCount);
+        analyser.getByteFrequencyData(freqData);
       }
-      let bass=matSolid.uniforms.uBass.value;
-      let treble=matSolid.uniforms.uTreble.value;
 
-      let themeVal=parseFloat(document.getElementById('slider-theme').value);
+      // Smoothing sfera
+      const curBass=matSolid.uniforms.uBass.value;
+      const curTreble=matSolid.uniforms.uTreble.value;
+      matSolid.uniforms.uBass.value+=(a.bass-curBass)*0.10;
+      matSolid.uniforms.uTreble.value+=(a.treble-curTreble)*0.06;
+      matSolid.uniforms.uTime.value=elapsed;
+      const bass=matSolid.uniforms.uBass.value;
+      const treble=matSolid.uniforms.uTreble.value;
+
+      // Tema
+      const themeVal=parseFloat(document.getElementById('slider-theme').value);
       matSolid.uniforms.uTheme.value=themeVal;
-      if(matWire) matWire.uniforms.uTheme.value=themeVal;
-      let themeIdx=Math.round(themeVal);
-      let tc=themeColors[Math.min(themeIdx,4)];
 
-      // === PARTICELLE ===
-      const positions = particles.attributes.position.array;
-      const colors = particles.attributes.color.array;
-      const count = 2000;
-      const activation = bass * 0.6 + treble * 0.4;
-      
-      for (let i = 0; i < count; i++) {
-        const idx = i * 3;
-        const phase = particlePhases[i];
-        
-        // Movimento lento
-        const orbitSpeed = 0.2 + activation * 0.8;
-        positions[idx] += Math.sin(t * orbitSpeed + phase) * 0.002;
-        positions[idx+1] += Math.cos(t * orbitSpeed * 0.7 + phase * 1.3) * 0.002;
-        positions[idx+2] += Math.sin(t * orbitSpeed * 0.5 + phase * 0.8) * 0.0015;
-        
-        // Illuminazione randomica basata sull'audio
-        const myRandom = Math.random();
-        const threshold = activation * 0.85;
-        
-        if (myRandom < threshold) {
-          // ACCESA: colore del tema con intensita random
-          const intensity = 0.2 + Math.random() * 0.8;
-          colors[idx] = tc.r * intensity;
-          colors[idx+1] = tc.g * intensity;
-          colors[idx+2] = tc.b * intensity;
-        } else {
-          // SPENTA: decay verso grigio scuro
-          colors[idx] *= 0.90;
-          colors[idx+1] *= 0.90;
-          colors[idx+2] *= 0.90;
-          // Minimo per non scomparire
-          if (colors[idx] < 0.03) colors[idx] = 0.03;
-          if (colors[idx+1] < 0.03) colors[idx+1] = 0.03;
-          if (colors[idx+2] < 0.05) colors[idx+2] = 0.05;
+      // Slider strati organici
+      const nuvoleVal=parseFloat(document.getElementById('slider-nuvole').value);
+      const radiciVal=parseFloat(document.getElementById('slider-radici').value);
+
+      // ============================================
+      // PARTICELLE
+      // ============================================
+      const positions=particles.attributes.position.array;
+      const colors=particles.attributes.color.array;
+      const count=3000;
+      const activation=bass*0.15+treble*0.1;
+      const tIdx=Math.round(themeVal);
+      const tc=themeColors[Math.min(tIdx,4)];
+
+      for(let i=0;i<count;i++){
+        const idx=i*3;
+        const phase=particlePhases[i];
+
+        const orbitSpeed=0.2+activation*0.4;
+        positions[idx]+=Math.sin(elapsed*orbitSpeed+phase)*0.002;
+        positions[idx+1]+=Math.cos(elapsed*orbitSpeed*0.7+phase*1.3)*0.002;
+        positions[idx+2]+=Math.sin(elapsed*orbitSpeed*0.5+phase*0.8)*0.0015;
+
+        // Accensione randomica — le particelle NON scompaiono mai completamente
+        // Hanno una luce base costante (come stelle) + boost audio
+        const rnd=Math.random();
+        const threshold=activation*0.9;
+        if(rnd<threshold){
+          // Quando c'e attivazione audio: particelle piu luminose, colorate dal tema
+          const intensity=0.3+activation*0.7+Math.random()*0.5;
+          colors[idx]=tc.r*intensity;
+          colors[idx+1]=tc.g*intensity;
+          colors[idx+2]=tc.b*intensity;
+        }else{
+          // Quando e calmo: svaniscono molto lentamente, mantenendo una luce base
+          // Fade lento (0.98 invece di 0.91) per non perderle mai
+          colors[idx]*=0.98;
+          colors[idx+1]*=0.98;
+          colors[idx+2]*=0.98;
+          // Floor piu alto: le particelle restano sempre visibili come stelle deboli
+          if(colors[idx]<0.08)colors[idx]=0.08;
+          if(colors[idx+1]<0.08)colors[idx+1]=0.08;
+          if(colors[idx+2]<0.12)colors[idx+2]=0.12;
         }
-        
-        // Scoppio con bassi forti
-        if (bass > 0.55 && Math.random() < 0.08) {
-          const dist = Math.sqrt(positions[idx]**2 + positions[idx+1]**2 + positions[idx+2]**2);
-          if (dist > 0.1) {
-            const push = 0.025 * bass;
-            positions[idx] += (positions[idx]/dist) * push;
-            positions[idx+1] += (positions[idx+1]/dist) * push;
-            positions[idx+2] += (positions[idx+2]/dist) * push;
-            // Bianco brillante
-            colors[idx] = 1.0;
-            colors[idx+1] = 1.0;
-            colors[idx+2] = 1.0;
+
+        if(bass>0.6&&Math.random()<0.07){
+          const dx=positions[idx],dy=positions[idx+1],dz=positions[idx+2];
+          const dist=Math.sqrt(dx*dx+dy*dy+dz*dz);
+          if(dist>0.1){
+            const push=0.04*bass;
+            positions[idx]+=(dx/dist)*push;
+            positions[idx+1]+=(dy/dist)*push;
+            positions[idx+2]+=(dz/dist)*push;
+            colors[idx]=1.0; colors[idx+1]=1.0; colors[idx+2]=1.0;
           }
         }
       }
-      
-      particles.attributes.position.needsUpdate = true;
-      particles.attributes.color.needsUpdate = true;
-      particleSystem.material.size = 0.03 + activation * 0.07;
+      particles.attributes.position.needsUpdate=true;
+      particles.attributes.color.needsUpdate=true;
+      particleSystem.material.size=0.03+activation*0.09;
 
-      scene.rotation.y=t*0.15;
-      scene.rotation.x=Math.sin(t*0.1)*0.05;
+      // Rotazione scena
+      scene.rotation.y=elapsed*0.1;
+      scene.rotation.x=Math.sin(elapsed*0.1)*0.05;
 
-      renderer.render(scene, camera);
+      // ============================================
+      // PASSO 1: Scie fluide + scena 3D (rtA → rtB)
+      // ============================================
+      feedbackMat.uniforms.tDiffuse.value=rtA.texture;
+        feedbackMat.uniforms.uZoom.value=0.998-bass*0.001;
+      feedbackMat.uniforms.uFade.value=0.97+bass*0.005;
+      feedbackMat.uniforms.uBlur.value=0.8+bass*0.15;
+      renderer.setRenderTarget(rtB);
+      renderer.clear();
+      renderer.render(feedbackScene,orthoCamera);
+
+      renderer.autoClear=false;
+      renderer.render(scene,camera,rtB);
+      renderer.autoClear=true;
+
+      // ============================================
+      // PASSO 2: Nuvole (se attivo)
+      // ============================================
+      if(nuvoleVal>0.0){
+        nuvoleMat.uniforms.tPrev.value=rtNuvoleA.texture;
+        nuvoleMat.uniforms.uTime.value=elapsed;
+        nuvoleMat.uniforms.uBass.value=bass;
+        nuvoleMat.uniforms.uTheme.value=themeVal;
+        renderer.setRenderTarget(rtNuvoleB);
+        renderer.clear();
+        renderer.render(nuvoleScene,orthoCamera);
+        let tmp=rtNuvoleA; rtNuvoleA=rtNuvoleB; rtNuvoleB=tmp;
+      }
+
+      // ============================================
+      // PASSO 3: Radici (se attivo)
+      // ============================================
+      if(radiciVal>0.0){
+        radiciMat.uniforms.tPrev.value=rtRadiciA.texture;
+        radiciMat.uniforms.uTime.value=elapsed;
+        radiciMat.uniforms.uBeat.value=a.beat;
+        radiciMat.uniforms.uTreble.value=treble;
+        radiciMat.uniforms.uTheme.value=themeVal;
+        renderer.setRenderTarget(rtRadiciB);
+        renderer.clear();
+        renderer.render(radiciScene,orthoCamera);
+        let tmp=rtRadiciA; rtRadiciA=rtRadiciB; rtRadiciB=tmp;
+      }
+
+      // ============================================
+      // PASSO 4: Muschio (sempre attivo)
+      // ============================================
+      muschioMat.uniforms.tPrev.value=rtMuschioA.texture;
+      muschioMat.uniforms.uTime.value=elapsed;
+      muschioMat.uniforms.uTreble.value=treble;
+      muschioMat.uniforms.uVolume.value=(bass+treble)*0.5;
+      muschioMat.uniforms.uTheme.value=themeVal;
+      renderer.setRenderTarget(rtMuschioB);
+      renderer.clear();
+      renderer.render(muschioScene,orthoCamera);
+      let tmpMuschio=rtMuschioA; rtMuschioA=rtMuschioB; rtMuschioB=tmpMuschio;
+
+      // ============================================
+      // PASSO 5: Mixer finale + Reaction-Diffusion + Assurdo
+      // ============================================
+      mixerMat.uniforms.tScene.value=rtB.texture;
+      mixerMat.uniforms.tNuvole.value=rtNuvoleA.texture;
+      mixerMat.uniforms.tRadici.value=rtRadiciA.texture;
+      mixerMat.uniforms.tMuschio.value=rtMuschioA.texture;
+      mixerMat.uniforms.uNuvole.value=nuvoleVal;
+      mixerMat.uniforms.uRadici.value=radiciVal;
+      mixerMat.uniforms.uBass.value=bass;
+
+      const organicVal=parseFloat(document.getElementById('slider-organic').value);
+      const assurdoVal=parseFloat(document.getElementById('slider-assurdo').value);
+
+      // Variabile per tenere traccia del risultato attuale
+      let currentResult=null;
+
+      if(organicVal>0.0){
+        // Renderizza mixer su rtA (temporaneo)
+        renderer.setRenderTarget(rtA);
+        renderer.clear();
+        renderer.render(mixerScene,orthoCamera);
+        currentResult=rtA.texture;
+
+        // Simula un passo RD
+        rdSimMat.uniforms.tPrev.value=rdA.texture;
+        rdSimMat.uniforms.uFeed.value=0.054+bass*0.005;
+        rdSimMat.uniforms.uKill.value=0.063+treble*0.003;
+        rdSimMat.uniforms.uDiffB.value=0.5+bass*0.05;
+        rdSimMat.uniforms.uTime.value=elapsed;
+        renderer.setRenderTarget(rdB);
+        renderer.clear();
+        renderer.render(rdSimScene,orthoCamera);
+
+        // Compositing finale: mixer + RD
+        rdCompositeMat.uniforms.tScene.value=rtA.texture;
+        rdCompositeMat.uniforms.tRD.value=rdB.texture;
+        rdCompositeMat.uniforms.uOrganic.value=organicVal;
+        rdCompositeMat.uniforms.uBass.value=bass;
+        rdCompositeMat.uniforms.uTime.value=elapsed;
+        rdCompositeMat.uniforms.uTheme.value=themeVal;
+
+        if(assurdoVal>0.0){
+          // Se c'è anche Assurdo, renderizza il composito RD in rtMuschioB (RT temporaneo libero)
+          renderer.setRenderTarget(rtMuschioB);
+          renderer.clear();
+          renderer.render(rdCompositeScene,orthoCamera);
+          currentResult=rtMuschioB.texture;
+        }else{
+          // Solo organicità: mostra direttamente
+          renderer.setRenderTarget(null);
+          renderer.render(rdCompositeScene,orthoCamera);
+        }
+
+        // Swap RD ping-pong
+        const rdTemp=rdA; rdA=rdB; rdB=rdTemp;
+      }else{
+        // Senza organicità: mixer diretto
+        if(assurdoVal>0.0){
+          // Salva mixer in un RT temporaneo
+          renderer.setRenderTarget(rtA);
+          renderer.clear();
+          renderer.render(mixerScene,orthoCamera);
+          currentResult=rtA.texture;
+        }else{
+          // Nessun effetto extra: mostra direttamente
+          renderer.setRenderTarget(null);
+          renderer.render(mixerScene,orthoCamera);
+          currentResult=null;
+        }
+      }
+
+      // PASSO ASSURDO (se attivo)
+      if(assurdoVal>0.0 && currentResult!==null){
+        // Simula passo Assurdo
+        frameCount++;
+        assurdoSimMat.uniforms.tPrev.value=rtAssurdoB.texture;
+        assurdoSimMat.uniforms.uTime.value=elapsed;
+        assurdoSimMat.uniforms.uBass.value=bass;
+        assurdoSimMat.uniforms.uTreble.value=treble;
+        assurdoSimMat.uniforms.uTheme.value=themeVal;
+        assurdoSimMat.uniforms.uFrame.value=frameCount;
+        renderer.setRenderTarget(rtAssurdoA);
+        renderer.clear();
+        renderer.render(assurdoSimScene,orthoCamera);
+
+        // Compositing finale: risultato precedente + Assurdo
+        assurdoCompositeMat.uniforms.tScene.value=currentResult;
+        assurdoCompositeMat.uniforms.tAssurdo.value=rtAssurdoA.texture;
+        assurdoCompositeMat.uniforms.uAssurdo.value=assurdoVal;
+        assurdoCompositeMat.uniforms.uBass.value=bass;
+        assurdoCompositeMat.uniforms.uTime.value=elapsed;
+        renderer.setRenderTarget(null);
+        renderer.render(assurdoCompositeScene,orthoCamera);
+
+        // Swap Assurdo ping-pong
+        const asTemp=rtAssurdoA; rtAssurdoA=rtAssurdoB; rtAssurdoB=asTemp;
+      }
+
+      // Swap scie ping-pong
+      const temp=rtA; rtA=rtB; rtB=temp;
+
+      if(freqData) updateEq(freqData);
     }
 
-    init();
-    setupUI();
-    animate(0);
+    init(); setupUI(); animate(0);
   </script>
 </body>
 </html>

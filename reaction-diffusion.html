@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <title>Nature Visual — Audio Reactive AI Art</title>
+  <style>
+    body { margin: 0; overflow: hidden; background: #000; color: #fff; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    #canvas-container { width: 100vw; height: 100vh; position: fixed; top: 0; left: 0; z-index: 1; }
+    #ui-overlay { position: fixed; top: 20px; left: 20px; z-index: 10; background: rgba(0,0,0,0.6); padding: 16px 20px; border-radius: 12px; border: 1px solid rgba(0,255,255,0.2); backdrop-filter: blur(4px); max-width: 300px; }
+    #ui-overlay h1 { margin: 0 0 12px 0; font-size: 15px; color: #0ff; text-transform: uppercase; letter-spacing: 2px; }
+    .btn { background: rgba(0,255,255,0.08); border: 1px solid #0ff; color: #0ff; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; transition: all 0.2s; margin-right: 8px; margin-bottom: 8px; }
+    .btn:hover { background: rgba(0,255,255,0.25); box-shadow: 0 0 12px rgba(0,255,255,0.3); }
+    #btn-play { display: none; }
+    .slider-row { margin: 8px 0; display: flex; align-items: center; }
+    .slider-row label { font-size: 11px; text-transform: uppercase; color: #aaa; width: 80px; }
+    .slider-row input[type="range"] { flex: 1; margin: 0 8px; accent-color: #0ff; }
+    .slider-row span { font-size: 11px; color: #0ff; width: 70px; text-align: right; }
+    #file-name { font-size: 11px; color: #888; margin-top: 6px; font-style: italic; }
+    #equalizer { display: flex; gap: 3px; align-items: flex-end; height: 30px; margin-top: 10px; }
+    .eq-bar { width: 8px; background: linear-gradient(to top, #0ff, #f0f); border-radius: 2px; min-height: 2px; transition: height 0.05s; }
+    #error-box { position: fixed; bottom: 20px; left: 20px; right: 20px; max-height: 120px; overflow: auto; background: rgba(200,0,0,0.9); color: #fff; padding: 12px; font-family: monospace; font-size: 12px; z-index: 9999; display: none; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <div id="canvas-container"></div>
+  <div id="ui-overlay">
+    <h1>Nature Visual</h1>
+    <input type="file" id="audio-input" accept="audio/*" style="display:none;">
+    <button class="btn" id="btn-load">Carica Canzone</button>
+    <button class="btn" id="btn-play">Play</button>
+    <button class="btn" id="btn-change" style="display:none;">Cambia</button>
+    <div class="slider-row">
+      <label>Tema</label>
+      <input type="range" id="slider-theme" min="0" max="4" step="0.01" value="0">
+      <span id="theme-label">Rosa</span>
+    </div>
+    <div id="file-name">Nessuna canzone caricata</div>
+    <div id="equalizer"></div>
+  </div>
+  <div id="error-box"></div>
+
+  <!-- Three.js r128 via CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+  <script>
+    // ============================================
+    // ERRORE HANDLER
+    // ============================================
+    const errBox = document.getElementById('error-box');
+    window.addEventListener('error', (e) => {
+      errBox.style.display = 'block';
+      errBox.textContent += e.message + ' (riga ' + e.lineno + ')\n';
+    });
+
+    // ============================================
+    // VARIABILI GLOBALI
+    // ============================================
+    let renderer, orthoCamera;
+    let rtA, rtB;
+    let simScene, simMesh, simMat;
+    let displayScene, displayMesh, displayMat;
+    let audioCtx, analyser, audioEl;
+    let isPlaying = false;
+    let frameCount = 0;
+    let lastMutationTime = 0;
+    const MUTATION_COOLDOWN = 0.2;
+    let eqBars = [];
+    const themeNames = ['Rosa', 'Giallo', 'Blu', 'B/N', 'Arcobaleno'];
+
+    // ============================================
+    // SHADER GLSL — GENERATORE ORGANICO
+    // ============================================
+
+    const vsFullscreen = `
+      varying vec2 vUv;
+      void main(){
+        vUv = uv;
+        gl_Position = vec4(position.xy, 0.0, 1.0);
+      }
+    `;
+
+    // Fragment: genera pattern organici con noise multicromatico + mirror + trail accumulato
+    const fsSim = `
+      precision highp float;
+      uniform sampler2D tPrev;      // Frame precedente (RGB accumulato)
+      uniform float uTime;
+      uniform float uBass;
+      uniform float uTreble;
+      uniform float uTheme;
+      uniform float uSeed;
+      uniform float uFrame;
+      varying vec2 vUv;
+
+      // --- 2D Simplex Noise ---
+      vec3 mod289(vec3 x){return x-floor(x*(1.0/289.0))*289.0;}
+      vec2 mod289(vec2 x){return x-floor(x*(1.0/289.0))*289.0;}
+      vec3 permute(vec3 x){return mod289(((x*34.0)+1.0)*x);}
+      float snoise(vec2 v){
+        const vec4 C = vec4(0.211324865405187, 0.366025403784439,
+                            -0.577350269189626, 0.024390243902439);
+        vec2 i  = floor(v + dot(v, C.yy));
+        vec2 x0 = v - i + dot(i, C.xx);
+        vec2 i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+        vec4 x12 = x0.xyxy + C.xxzz;
+        x12.xy -= i1;
+        i = mod289(i);
+        vec3 p = permute(permute(i.y + vec3(0.0, i1.y, 1.0)) + i.x + vec3(0.0, i1.x, 1.0));
+        vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,x12.xy), dot(x12.zw,x12.zw)), 0.0);
+        m = m*m; m = m*m;
+        vec3 x = 2.0 * fract(p * C.www) - 1.0;
+        vec3 h = abs(x) - 0.5;
+        vec3 ox = floor(x + 0.5);
+        vec3 a0 = x - ox;
+        m *= 1.79284291400159 - 0.85373472095314 * (a0*a0 + h*h);
+        vec3 g;
+        g.x = a0.x * x0.x + h.x * x0.y;
+        g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+        return 130.0 * dot(m, g);
+      }
+
+      // --- Palette 5 Temi ---
+      vec3 palette(float t, float idx){
+        float tt = t + uTime * 0.3 + uSeed * 0.2;
+        float wave = sin(tt * 3.0) * 0.5 + 0.5;
+        float wave2 = cos(tt * 7.0 + 1.5) * 0.5 + 0.5;
+        float wave3 = sin(tt * 11.0 + 3.0) * 0.5 + 0.5;
+        float chaos = sin(tt * 13.0) * 0.5 + 0.5;
+
+        if(idx < 0.5){
+          vec3 hotPink = vec3(1.0, 0.0, 0.5);
+          vec3 electricBlue = vec3(0.2, 0.6, 1.0);
+          vec3 acidGreen = vec3(0.6, 1.0, 0.2);
+          vec3 deepPurple = vec3(0.4, 0.0, 0.8);
+          vec3 mix1 = mix(hotPink, electricBlue, wave);
+          vec3 mix2 = mix(acidGreen, deepPurple, wave2);
+          return mix(mix1, mix2, wave3);
+        }
+        else if(idx < 1.5){
+          vec3 lemon = vec3(1.0, 0.9, 0.0);
+          vec3 hotMagenta = vec3(1.0, 0.0, 0.6);
+          vec3 toxicGreen = vec3(0.0, 1.0, 0.3);
+          vec3 bloodOrange = vec3(1.0, 0.2, 0.0);
+          vec3 mix1 = mix(lemon, hotMagenta, wave);
+          vec3 mix2 = mix(toxicGreen, bloodOrange, wave2);
+          return mix(mix1, mix2, wave3);
+        }
+        else if(idx < 2.5){
+          vec3 navy = vec3(0.0, 0.1, 0.6);
+          vec3 neonCyan = vec3(0.0, 1.0, 1.0);
+          vec3 sunsetOrange = vec3(1.0, 0.3, 0.1);
+          vec3 laserPink = vec3(1.0, 0.0, 0.8);
+          vec3 mix1 = mix(navy, neonCyan, wave);
+          vec3 mix2 = mix(sunsetOrange, laserPink, wave2);
+          return mix(mix1, mix2, wave3);
+        }
+        else if(idx < 3.5){
+          float grey = sin(t * 2.0 + uTime * 0.15) * 0.5 + 0.5;
+          float tint = sin(t * 8.0 + uTime * 0.5) * 0.5 + 0.5;
+          vec3 bw = vec3(grey);
+          vec3 neon = vec3(0.0, 1.0, 1.0) * (0.3 + uTreble * 0.7);
+          return mix(bw, neon, tint * uTreble * 0.4);
+        }
+        else {
+          float r = sin(t * 6.0 + uTime * 0.4) * 0.5 + 0.5;
+          float g = sin(t * 6.0 + uTime * 0.4 + 2.094) * 0.5 + 0.5;
+          float b = sin(t * 6.0 + uTime * 0.4 + 4.189) * 0.5 + 0.5;
+          return vec3(r, g, b) * (0.7 + uTreble * 0.6);
+        }
+      }
+
+      void main(){
+        // === SEMINA INIZIALE (primi frame) ===
+        if(uFrame < 20.0){
+          float n = snoise(vUv * 8.0 + uSeed);
+          if(n > 0.4){
+            // Inietta colori iniziali
+            float tIdx = floor(uTheme);
+            vec3 col = palette(vUv.x + vUv.y + uSeed * 0.1, tIdx);
+            gl_FragColor = vec4(col * 0.8, 1.0);
+          } else {
+            gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+          }
+          return;
+        }
+
+        // === FEEDBACK: zoom + blur del frame precedente ===
+        // Zoom leggero verso il centro (scie che convergono)
+        float zoomAmt = 0.995 - uBass * 0.003;
+        vec2 centered = (vUv - 0.5) * zoomAmt + 0.5;
+
+        // Blur radiale semplice (3 campioni)
+        vec3 prevCol = texture2D(tPrev, centered).rgb * 0.5;
+        prevCol += texture2D(tPrev, centered + vec2(0.001, 0.0)).rgb * 0.125;
+        prevCol += texture2D(tPrev, centered - vec2(0.001, 0.0)).rgb * 0.125;
+        prevCol += texture2D(tPrev, centered + vec2(0.0, 0.001)).rgb * 0.125;
+        prevCol += texture2D(tPrev, centered - vec2(0.0, 0.001)).rgb * 0.125;
+
+        // Fade (scie lunghe)
+        float fade = 0.90 + uTreble * 0.04;
+        prevCol *= fade;
+
+        // === GENERATORE PATTERN ORGANICO ===
+        // Mirror 4-way (simmetria assiale come nel video)
+        vec2 mUV = vUv;
+        mUV.x = abs(mUV.x - 0.5) * 2.0;
+        mUV.y = abs(mUV.y - 0.5) * 2.0;
+
+        // Flow noise distortion
+        float flowScale = 4.0 + uBass * 3.0;
+        float fx = snoise(mUV * flowScale + uTime * 0.2 + uSeed) * 0.04;
+        float fy = snoise(mUV * flowScale + 100.0 + uTime * 0.2 + uSeed) * 0.04;
+        vec2 distorted = mUV + vec2(fx, fy);
+
+        // Pattern multicromatico (simula allucinazione AI)
+        float n1 = snoise(distorted * 3.0 + uTime * 0.15);
+        float n2 = snoise(distorted * 6.0 - uTime * 0.1);
+        float n3 = snoise(distorted * 1.5 + uTime * 0.05);
+
+        // Combinazione per struttura organica
+        float structure = n1 * 0.5 + n2 * 0.3 + n3 * 0.2;
+        structure = smoothstep(-0.2, 0.6, structure); // contrasto
+
+        // Colore psichedelico
+        float tIdx = floor(uTheme);
+        float palT = structure * 2.0 + uTime * 0.1;
+        vec3 newCol = palette(palT, tIdx);
+
+        // Glow sui bordi
+        newCol += newCol * pow(structure, 3.0) * 2.0;
+
+        // Saturazione extra con bassi
+        newCol = mix(vec3(0.02), newCol, 0.5 + uBass * 0.5);
+
+        // === COMPOSIZIONE FINALE ===
+        // Blend tra feedback accumulato e nuovo pattern
+        float blendAmt = 0.25 + uBass * 0.15;
+        vec3 finalCol = mix(prevCol, newCol, blendAmt);
+
+        // Boost flash con bassi violenti
+        if(uBass > 0.6){
+          float flash = smoothstep(0.6, 0.9, uBass);
+          finalCol += vec3(flash * 0.3);
+        }
+
+        gl_FragColor = vec4(finalCol, 1.0);
+      }
+    `;
+
+    // Display pass-through
+    const fsDisplay = `
+      precision mediump float;
+      uniform sampler2D tDiffuse;
+      varying vec2 vUv;
+      void main(){
+        gl_FragColor = vec4(texture2D(tDiffuse, vUv).rgb, 1.0);
+      }
+    `;
+
+    // ============================================
+    // INIZIALIZZAZIONE
+    // ============================================
+
+    function init(){
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+      orthoCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+      const planeGeo = new THREE.PlaneGeometry(2, 2);
+
+      // Scena Simulazione
+      simScene = new THREE.Scene();
+      simMat = new THREE.ShaderMaterial({
+        uniforms: {
+          tPrev:   { value: null },
+          uTime:   { value: 0.0 },
+          uBass:   { value: 0.0 },
+          uTreble: { value: 0.0 },
+          uTheme:  { value: 0.0 },
+          uSeed:   { value: 42.0 },
+          uFrame:  { value: 0.0 }
+        },
+        vertexShader: vsFullscreen,
+        fragmentShader: fsSim,
+        depthWrite: false
+      });
+      simMesh = new THREE.Mesh(planeGeo, simMat);
+      simScene.add(simMesh);
+
+      // Scena Display
+      displayScene = new THREE.Scene();
+      displayMat = new THREE.ShaderMaterial({
+        uniforms: { tDiffuse: { value: null } },
+        vertexShader: vsFullscreen,
+        fragmentShader: fsDisplay,
+        depthWrite: false
+      });
+      displayMesh = new THREE.Mesh(planeGeo, displayMat);
+      displayScene.add(displayMesh);
+
+      // Render Targets
+      setupRenderTargets();
+
+      window.addEventListener('resize', onResize);
+    }
+
+    function setupRenderTargets(){
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      const opts = {
+        minFilter: THREE.LinearFilter,
+        magFilter: THREE.LinearFilter,
+        format: THREE.RGBAFormat,
+        type: THREE.UnsignedByteType
+      };
+      rtA = new THREE.WebGLRenderTarget(w, h, opts);
+      rtB = new THREE.WebGLRenderTarget(w, h, opts);
+    }
+
+    function onResize(){
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      renderer.setSize(w, h);
+      rtA.setSize(w, h);
+      rtB.setSize(w, h);
+    }
+
+    // ============================================
+    // AUDIO
+    // ============================================
+
+    function loadAudio(file){
+      audioEl = document.createElement('audio');
+      audioEl.src = URL.createObjectURL(file);
+      audioEl.crossOrigin = 'anonymous';
+      audioEl.loop = true;
+
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const src = audioCtx.createMediaElementSource(audioEl);
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 2048;
+
+      src.connect(analyser);
+      analyser.connect(audioCtx.destination);
+
+      audioEl.play();
+      isPlaying = true;
+
+      document.getElementById('file-name').textContent = file.name;
+      document.getElementById('btn-load').style.display = 'none';
+      document.getElementById('btn-play').style.display = 'inline-block';
+      document.getElementById('btn-play').textContent = 'Pause';
+      document.getElementById('btn-change').style.display = 'inline-block';
+    }
+
+    function getAudioLevels(){
+      if(!analyser || !audioCtx) return { bass: 0, mid: 0, treble: 0 };
+      const data = new Uint8Array(analyser.frequencyBinCount);
+      analyser.getByteFrequencyData(data);
+
+      const nyq = audioCtx.sampleRate / 2;
+      const bins = analyser.frequencyBinCount;
+      const fpb = nyq / bins;
+
+      const bEnd = Math.min(Math.floor(150 / fpb), bins);
+      let bSum = 0;
+      for(let i = 0; i < bEnd; i++) bSum += data[i];
+      const bass = bSum / Math.max(bEnd * 255, 1);
+
+      const mStart = bEnd;
+      const mEnd = Math.min(Math.floor(2500 / fpb), bins);
+      let mSum = 0;
+      for(let i = mStart; i < mEnd; i++) mSum += data[i];
+      const mid = mSum / Math.max((mEnd - mStart) * 255, 1);
+
+      const tStart = mEnd;
+      const tEnd = Math.min(Math.floor(8000 / fpb), bins);
+      let tSum = 0;
+      for(let i = tStart; i < tEnd; i++) tSum += data[i];
+      const treble = tSum / Math.max((tEnd - tStart) * 255, 1);
+
+      return { bass, mid, treble };
+    }
+
+    // ============================================
+    // EQUALIZER UI
+    // ============================================
+
+    function makeEq(){
+      const c = document.getElementById('equalizer');
+      for(let i = 0; i < 8; i++){
+        const bar = document.createElement('div');
+        bar.className = 'eq-bar';
+        bar.style.height = '2px';
+        c.appendChild(bar);
+        eqBars.push(bar);
+      }
+    }
+    function updateEq(dataArray){
+      if(!analyser) return;
+      const bpb = Math.floor(dataArray.length / eqBars.length);
+      for(let i = 0; i < eqBars.length; i++){
+        let s = 0;
+        for(let j = 0; j < bpb; j++) s += dataArray[i * bpb + j];
+        eqBars[i].style.height = Math.max(2, (s / bpb / 255) * 30) + 'px';
+      }
+    }
+
+    // ============================================
+    // UI EVENTS
+    // ============================================
+
+    function setupUI(){
+      const audIn = document.getElementById('audio-input');
+      const btnLoad = document.getElementById('btn-load');
+      const btnPlay = document.getElementById('btn-play');
+      const btnChange = document.getElementById('btn-change');
+      const sliderTheme = document.getElementById('slider-theme');
+      const themeLabel = document.getElementById('theme-label');
+
+      btnLoad.addEventListener('click', () => audIn.click());
+
+      btnPlay.addEventListener('click', () => {
+        if(!audioEl) return;
+        if(isPlaying){ audioEl.pause(); btnPlay.textContent = 'Play'; }
+        else { audioEl.play(); btnPlay.textContent = 'Pause'; }
+        isPlaying = !isPlaying;
+      });
+
+      btnChange.addEventListener('click', () => {
+        if(audioEl){ audioEl.pause(); audioEl = null; }
+        audIn.value = '';
+        audIn.click();
+      });
+
+      audIn.addEventListener('change', (e) => {
+        const f = e.target.files[0];
+        if(f) loadAudio(f);
+      });
+
+      sliderTheme.addEventListener('input', (e) => {
+        const v = parseFloat(e.target.value);
+        themeLabel.textContent = themeNames[Math.min(Math.round(v), 4)];
+      });
+
+      makeEq();
+      document.addEventListener('click', () => {
+        if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+      }, { once: true });
+    }
+
+    // ============================================
+    // LOOP DI ANIMAZIONE
+    // ============================================
+
+    function animate(time){
+      requestAnimationFrame(animate);
+      const elapsed = time * 0.001;
+      frameCount++;
+
+      // Analisi Audio
+      let bass = 0, mid = 0, treble = 0;
+      let freqData = null;
+      if(analyser){
+        const lv = getAudioLevels();
+        bass = lv.bass;
+        mid = lv.mid;
+        treble = lv.treble;
+        freqData = new Uint8Array(analyser.frequencyBinCount);
+        analyser.getByteFrequencyData(freqData);
+      }
+
+      // Smoothing
+      simMat.uniforms.uTime.value = elapsed;
+      const curB = simMat.uniforms.uBass.value;
+      const curT = simMat.uniforms.uTreble.value;
+      simMat.uniforms.uBass.value += (bass - curB) * 0.12;
+      simMat.uniforms.uTreble.value += (treble - curT) * 0.18;
+
+      // Trigger Mutazione (beat snap)
+      if(mid > 0.55 && (elapsed - lastMutationTime) > MUTATION_COOLDOWN){
+        simMat.uniforms.uSeed.value += 5.0 + Math.random() * 8.0;
+        lastMutationTime = elapsed;
+      }
+
+      // Tema
+      simMat.uniforms.uTheme.value = parseFloat(document.getElementById('slider-theme').value);
+      simMat.uniforms.uFrame.value = frameCount;
+
+      // ============================================
+      // PING-PONG FEEDBACK LOOP
+      // ============================================
+      // Frame N: leggi rtB come prev, scrivi su rtA
+      simMat.uniforms.tPrev.value = rtB.texture;
+      renderer.setRenderTarget(rtA);
+      renderer.render(simScene, orthoCamera);
+
+      // Display rtA sullo schermo
+      renderer.setRenderTarget(null);
+      displayMat.uniforms.tDiffuse.value = rtA.texture;
+      renderer.render(displayScene, orthoCamera);
+
+      // Swap
+      const temp = rtA; rtA = rtB; rtB = temp;
+
+      // Equalizer
+      if(freqData) updateEq(freqData);
+    }
+
+    // ============================================
+    // AVVIO
+    // ============================================
+    init();
+    setupUI();
+    animate(0);
+  </script>
+</body>
+</html>

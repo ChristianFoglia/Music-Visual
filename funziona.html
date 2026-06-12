@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <title>Nature Visual — Scie Lunghe + Sfera Audio</title>
+  <style>
+    body { margin: 0; overflow: hidden; background: #000; color: #fff; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    #canvas-container { width: 100vw; height: 100vh; position: fixed; top: 0; left: 0; z-index: 1; }
+    #ui-overlay { position: fixed; top: 20px; left: 20px; z-index: 10; background: rgba(0,0,0,0.6); padding: 16px 20px; border-radius: 12px; border: 1px solid rgba(0,255,255,0.2); backdrop-filter: blur(4px); max-width: 300px; }
+    #ui-overlay h1 { margin: 0 0 12px 0; font-size: 15px; color: #0ff; text-transform: uppercase; letter-spacing: 2px; }
+    .btn { background: rgba(0,255,255,0.08); border: 1px solid #0ff; color: #0ff; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; transition: all 0.2s; margin-right: 8px; margin-bottom: 8px; }
+    .btn:hover { background: rgba(0,255,255,0.25); box-shadow: 0 0 12px rgba(0,255,255,0.3); }
+    #btn-play { display: none; }
+    .slider-row { margin: 8px 0; display: flex; align-items: center; }
+    .slider-row label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #aaa; width: 80px; }
+    .slider-row input[type="range"] { flex: 1; margin: 0 8px; accent-color: #0ff; }
+    .slider-row span { font-size: 11px; color: #0ff; width: 70px; text-align: right; }
+    #file-name { font-size: 11px; color: #888; margin-top: 6px; font-style: italic; }
+    #equalizer { display: flex; gap: 3px; align-items: flex-end; height: 30px; margin-top: 10px; }
+    .eq-bar { width: 8px; background: linear-gradient(to top, #0ff, #f0f); border-radius: 2px; min-height: 2px; transition: height 0.05s linear; }
+  </style>
+</head>
+<body>
+  <div id="canvas-container"></div>
+  <div id="ui-overlay">
+    <h1>Nature Visual</h1>
+    <input type="file" id="audio-input" accept="audio/*" style="display:none;">
+    <button class="btn" id="btn-load">Carica Canzone</button>
+    <button class="btn" id="btn-play">Play</button>
+    <button class="btn" id="btn-change" style="display:none;">Cambia</button>
+    <div class="slider-row">
+      <label>Tema</label>
+      <input type="range" id="slider-theme" min="0" max="4" step="0.01" value="0">
+      <span id="theme-label">Rosa</span>
+    </div>
+    <div id="file-name">Nessuna canzone caricata</div>
+    <div id="equalizer"></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+  <script>
+    // ============================================
+    // VARIABILI GLOBALI
+    // ============================================
+    let scene, camera, renderer;
+    let matSolid, mainMesh, wireMesh, wireMat;
+    let particles, particlePositions, particleColors, particlePhases;
+    let particleSystem;
+    let audioCtx, analyser, audioEl;
+    let isPlaying = false;
+    let eqBars = [];
+    const themeNames = ['Rosa', 'Giallo', 'Blu', 'B/N', 'Arcobaleno'];
+    const themeColors = [
+      {r:1.0,g:0.0,b:0.5}, {r:1.0,g:0.9,b:0.0}, {r:0.0,g:0.4,b:1.0},
+      {r:0.8,g:0.8,b:0.8}, {r:1.0,g:0.0,b:1.0}
+    ];
+
+    // --- PING-PONG FEEDBACK ---
+    let rtA, rtB;
+    let feedbackScene, displayScene, orthoCamera;
+    let feedbackMat, displayMat;
+
+    // ============================================
+    // SHADER SFERA (2 layer noise + shading + Fresnel)
+    // ============================================
+    const vsMain = `
+      uniform float uTime;
+      uniform float uBass;
+      varying vec3 vN;
+      varying vec3 vP;
+      varying float vDisp;
+      varying float vDetail;
+
+      vec3 mod289(vec3 x){return x-floor(x*(1.0/289.0))*289.0;}
+      vec4 mod289(vec4 x){return x-floor(x*(1.0/289.0))*289.0;}
+      vec4 permute(vec4 x){return mod289(((x*34.0)+1.0)*x);}
+      vec4 taylorInvSqrt(vec4 r){return 1.79284291400159-0.85373472095314*r;}
+      float snoise(vec3 v){
+        const vec2 C=vec2(1.0/6.0,1.0/3.0);
+        const vec4 D=vec4(0.0,0.5,1.0,2.0);
+        vec3 i=floor(v+dot(v,C.yyy));
+        vec3 x0=v-i+dot(i,C.xxx);
+        vec3 g=step(x0.yzx,x0.xyz);
+        vec3 l=1.0-g;
+        vec3 i1=min(g.xyz,l.zxy);
+        vec3 i2=max(g.xyz,l.zxy);
+        vec3 x1=x0-i1+C.xxx;
+        vec3 x2=x0-i2+C.yyy;
+        vec3 x3=x0-D.yyy;
+        i=mod289(i);
+        vec4 p=permute(permute(permute(i.z+vec4(0.0,i1.z,i2.z,1.0))+i.y+vec4(0.0,i1.y,i2.y,1.0))+i.x+vec4(0.0,i1.x,i2.x,1.0));
+        float n_=0.142857142857; vec3 ns=n_*D.wyz-D.xzx;
+        vec4 j=p-49.0*floor(p*ns.z*ns.z);
+        vec4 x_=floor(j*ns.z); vec4 y_=floor(j-7.0*x_);
+        vec4 x=x_*ns.x+ns.yyyy; vec4 y=y_*ns.x+ns.yyyy;
+        vec4 h=1.0-abs(x)-abs(y);
+        vec4 b0=vec4(x.xy,y.xy); vec4 b1=vec4(x.zw,y.zw);
+        vec4 s0=floor(b0)*2.0+1.0; vec4 s1=floor(b1)*2.0+1.0;
+        vec4 sh=-step(h,vec4(0.0));
+        vec4 a0=b0.xzyw+s0.xzyw*sh.xxyy;
+        vec4 a1=b1.xzyw+s1.xzyw*sh.zzww;
+        vec3 p0=vec3(a0.xy,h.x); vec3 p1=vec3(a0.zw,h.y);
+        vec3 p2=vec3(a1.xy,h.z); vec3 p3=vec3(a1.zw,h.w);
+        vec4 norm=taylorInvSqrt(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3)));
+        p0*=norm.x; p1*=norm.y; p2*=norm.z; p3*=norm.w;
+        vec4 m=max(0.6-vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)),0.0);
+        m=m*m;
+        return 42.0*dot(m*m,vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));
+      }
+
+      void main(){
+        float n1=snoise(position*2.0+vec3(uTime*0.5));
+        float n2=snoise(position*6.0+vec3(uTime*0.8+50.0));
+        float d=(n1*0.3+n2*0.08+uBass*1.5);
+        vec3 newPos=position+normal*d;
+        vDisp=abs(d); vDetail=abs(n2);
+        vN=normalize((modelMatrix*vec4(normal,0.0)).xyz);
+        vP=(modelMatrix*vec4(newPos,1.0)).xyz;
+        gl_Position=projectionMatrix*modelViewMatrix*vec4(newPos,1.0);
+      }
+    `;
+
+    const fsMain = `
+      precision highp float;
+      uniform float uTime;
+      uniform float uTreble;
+      uniform float uTheme;
+      varying vec3 vN;
+      varying vec3 vP;
+      varying float vDisp;
+      varying float vDetail;
+
+      vec3 palette(float t,float idx){
+        float tt=t+uTime*0.3;
+        float wave=sin(tt*3.0)*0.5+0.5;
+        float wave2=cos(tt*7.0+1.5)*0.5+0.5;
+        float wave3=sin(tt*11.0+3.0)*0.5+0.5;
+        float chaos=sin(tt*13.0)*0.5+0.5;
+        if(idx<0.5){
+          vec3 hotPink=vec3(1.0,0.0,0.5);
+          vec3 electricBlue=vec3(0.2,0.6,1.0);
+          vec3 acidGreen=vec3(0.6,1.0,0.2);
+          vec3 deepPurple=vec3(0.4,0.0,0.8);
+          vec3 peach=vec3(1.0,0.6,0.4);
+          vec3 mix1=mix(hotPink,electricBlue,wave);
+          vec3 mix2=mix(acidGreen,deepPurple,wave2);
+          vec3 mix3=mix(mix1,mix2,wave3);
+          return mix(mix3,peach,chaos*0.5);
+        }else if(idx<1.5){
+          vec3 lemon=vec3(1.0,0.9,0.0);
+          vec3 hotMagenta=vec3(1.0,0.0,0.6);
+          vec3 toxicGreen=vec3(0.0,1.0,0.3);
+          vec3 bloodOrange=vec3(1.0,0.2,0.0);
+          vec3 skyCyan=vec3(0.0,0.8,1.0);
+          vec3 mix1=mix(lemon,hotMagenta,wave);
+          vec3 mix2=mix(toxicGreen,bloodOrange,wave2);
+          vec3 mix3=mix(mix1,mix2,wave3);
+          return mix(mix3,skyCyan,chaos*0.4);
+        }else if(idx<2.5){
+          vec3 navy=vec3(0.0,0.1,0.6);
+          vec3 neonCyan=vec3(0.0,1.0,1.0);
+          vec3 sunsetOrange=vec3(1.0,0.3,0.1);
+          vec3 laserPink=vec3(1.0,0.0,0.8);
+          vec3 iceWhite=vec3(0.8,0.9,1.0);
+          vec3 mix1=mix(navy,neonCyan,wave);
+          vec3 mix2=mix(sunsetOrange,laserPink,wave2);
+          vec3 mix3=mix(mix1,mix2,wave3);
+          return mix(mix3,iceWhite,chaos*0.3);
+        }else if(idx<3.5){
+          float grey=sin(t*2.0+uTime*0.15)*0.5+0.5;
+          float tint=sin(t*8.0+uTime*0.5)*0.5+0.5;
+          vec3 bw=vec3(grey);
+          vec3 neon=vec3(0.0,1.0,1.0)*(0.3+uTreble*0.7);
+          return mix(bw,neon,tint*uTreble*0.4);
+        }else{
+          float r=sin(t*6.0+uTime*0.4)*0.5+0.5;
+          float g=sin(t*6.0+uTime*0.4+2.094)*0.5+0.5;
+          float b=sin(t*6.0+uTime*0.4+4.189)*0.5+0.5;
+          float boost=0.7+uTreble*0.6;
+          return vec3(r,g,b)*boost;
+        }
+      }
+
+      void main(){
+        float t=length(vP)*0.5+vDisp*2.0+uTime*0.05;
+        float i0=floor(uTheme); float i1=i0+1.0; float mf=fract(uTheme);
+        vec3 c0=palette(t,i0); vec3 c1=palette(t,min(i1,4.0));
+        vec3 base=mix(c0,c1,mf);
+        vec3 vd=normalize(vec3(0.0,0.0,3.0)-vP);
+        vec3 fakeNormal=normalize(vN+vec3(vDetail*0.5));
+        float diffuse=max(dot(fakeNormal,vd),0.0);
+        float fresnel=pow(1.0-max(dot(normalize(vN),vd),0.0),3.0);
+        vec3 final=base*(0.6+diffuse*0.4+vDisp*2.0)+vec3(fresnel*0.5);
+        final+=vec3(vDetail*0.15);
+        gl_FragColor=vec4(final,1.0);
+      }
+    `;
+
+    // ============================================
+    // SHADER FEEDBACK — Scie fluide (zoom+blur+fade)
+    // ============================================
+    const vsFeedback = `
+      varying vec2 vUv;
+      void main(){
+        vUv=uv;
+        gl_Position=vec4(position.xy,0.0,1.0);
+      }
+    `;
+
+    const fsFeedback = `
+      precision mediump float;
+      uniform sampler2D tDiffuse;
+      uniform float uZoom;
+      uniform float uFade;
+      uniform float uBlur;
+      varying vec2 vUv;
+
+      void main(){
+        // Zoom centrale verso il centro (convergenza)
+        vec2 uv=(vUv-0.5)*uZoom+0.5;
+
+        // Blur radiale 5x5 per scie piu morbide
+        vec4 col=vec4(0.0);
+        float total=0.0;
+        for(float x=-2.0;x<=2.0;x++){
+          for(float y=-2.0;y<=2.0;y++){
+            vec2 off=vec2(x,y)*uBlur*0.002;
+            float w=exp(-(x*x+y*y)*0.15);
+            col+=texture2D(tDiffuse,uv+off)*w;
+            total+=w;
+          }
+        }
+        col/=total;
+
+        // Fade scie (persistenza ALTISSIMA 0.97 = scie LUNGHE)
+        gl_FragColor=col*uFade;
+      }
+    `;
+
+    const vsDisplay = `
+      varying vec2 vUv;
+      void main(){
+        vUv=uv;
+        gl_Position=vec4(position.xy,0.0,1.0);
+      }
+    `;
+    const fsDisplay = `
+      precision mediump float;
+      uniform sampler2D tDiffuse;
+      varying vec2 vUv;
+      void main(){
+        gl_FragColor=texture2D(tDiffuse,vUv);
+      }
+    `;
+
+    // ============================================
+    // INIZIALIZZAZIONE
+    // ============================================
+    function init(){
+      renderer=new THREE.WebGLRenderer({antialias:true});
+      renderer.setSize(window.innerWidth,window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+      renderer.domElement.style.background='#000';
+      document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+      // SCENA 3D — SENZA background! (altrimenti cancella il feedback)
+      scene=new THREE.Scene();
+      // scene.background = null; // Default è null, quindi niente background opaco
+      camera=new THREE.PerspectiveCamera(60,window.innerWidth/window.innerHeight,0.1,100);
+      camera.position.z=3;
+
+      // Sfera 256x256
+      matSolid=new THREE.ShaderMaterial({
+        uniforms:{uTime:{value:0},uBass:{value:0},uTreble:{value:0},uTheme:{value:0}},
+        vertexShader:vsMain,fragmentShader:fsMain,side:THREE.DoubleSide
+      });
+      let geo=new THREE.SphereGeometry(1,256,256);
+      mainMesh=new THREE.Mesh(geo,matSolid); scene.add(mainMesh);
+      wireMat=matSolid.clone(); wireMat.wireframe=true;
+      wireMesh=new THREE.Mesh(geo,wireMat); wireMesh.visible=false; scene.add(wireMesh);
+
+      // Particelle
+      createParticles();
+
+      // --- PING-PONG SETUP ---
+      const w=window.innerWidth, h=window.innerHeight;
+      const rtOpts={
+        minFilter:THREE.LinearFilter, magFilter:THREE.LinearFilter,
+        format:THREE.RGBAFormat, type:THREE.UnsignedByteType
+      };
+      rtA=new THREE.WebGLRenderTarget(w,h,rtOpts);
+      rtB=new THREE.WebGLRenderTarget(w,h,rtOpts);
+
+      orthoCamera=new THREE.OrthographicCamera(-1,1,1,-1,0,1);
+      const planeGeo=new THREE.PlaneGeometry(2,2);
+
+      // Feedback: applica zoom+blur+fade al frame precedente
+      feedbackScene=new THREE.Scene();
+      feedbackMat=new THREE.ShaderMaterial({
+        uniforms:{
+          tDiffuse:{value:null},
+          uZoom:{value:0.998},   // Zoom LEGGERISSIMO = scie LUNGHISSIME
+          uFade:{value:0.97},    // Fade ALTISSIMO = persistenza LUNGA
+          uBlur:{value:0.8}      // Blur morbido
+        },
+        vertexShader:vsFeedback,fragmentShader:fsFeedback,
+        depthWrite:false
+      });
+      feedbackScene.add(new THREE.Mesh(planeGeo,feedbackMat));
+
+      // Display: mostra il composito finale sullo schermo
+      displayScene=new THREE.Scene();
+      displayMat=new THREE.ShaderMaterial({
+        uniforms:{tDiffuse:{value:null}},
+        vertexShader:vsDisplay,fragmentShader:fsDisplay,
+        depthWrite:false
+      });
+      displayScene.add(new THREE.Mesh(planeGeo,displayMat));
+
+      window.addEventListener('resize',onResize);
+    }
+
+    function onResize(){
+      const w=window.innerWidth, h=window.innerHeight;
+      camera.aspect=w/h; camera.updateProjectionMatrix();
+      renderer.setSize(w,h);
+      rtA.setSize(w,h); rtB.setSize(w,h);
+    }
+
+    // ============================================
+    // PARTICELLE 3000
+    // ============================================
+    function createParticles(){
+      const count=3000;
+      particles=new THREE.BufferGeometry();
+      particlePositions=new Float32Array(count*3);
+      particleColors=new Float32Array(count*3);
+      particlePhases=new Float32Array(count);
+      for(let i=0;i<count;i++){
+        const theta=Math.random()*Math.PI*2;
+        const phi=Math.acos(2*Math.random()-1);
+        const r=1.4+Math.random()*2.8;
+        particlePositions[i*3]=r*Math.sin(phi)*Math.cos(theta);
+        particlePositions[i*3+1]=r*Math.sin(phi)*Math.sin(theta);
+        particlePositions[i*3+2]=r*Math.cos(phi);
+        particleColors[i*3]=0.03; particleColors[i*3+1]=0.03; particleColors[i*3+2]=0.05;
+        particlePhases[i]=Math.random()*Math.PI*2;
+      }
+      particles.setAttribute('position',new THREE.BufferAttribute(particlePositions,3));
+      particles.setAttribute('color',new THREE.BufferAttribute(particleColors,3));
+      const pMat=new THREE.PointsMaterial({
+        size:0.035,vertexColors:true,blending:THREE.AdditiveBlending,
+        depthWrite:false,transparent:true,opacity:0.9,sizeAttenuation:true
+      });
+      particleSystem=new THREE.Points(particles,pMat); scene.add(particleSystem);
+    }
+
+    // ============================================
+    // AUDIO
+    // ============================================
+    function loadAudio(file){
+      audioEl=document.createElement('audio');
+      audioEl.src=URL.createObjectURL(file);
+      audioEl.crossOrigin='anonymous';
+      audioEl.loop=true;
+      audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+      const src=audioCtx.createMediaElementSource(audioEl);
+      analyser=audioCtx.createAnalyser(); analyser.fftSize=2048;
+      src.connect(analyser); analyser.connect(audioCtx.destination);
+      audioEl.play(); isPlaying=true;
+      document.getElementById('file-name').textContent=file.name;
+      document.getElementById('btn-load').style.display='none';
+      document.getElementById('btn-play').style.display='inline-block';
+      document.getElementById('btn-play').textContent='Pause';
+      document.getElementById('btn-change').style.display='inline-block';
+    }
+
+    function getAudio(){
+      if(!analyser||!audioCtx) return{bass:0,treble:0};
+      const data=new Uint8Array(analyser.frequencyBinCount);
+      analyser.getByteFrequencyData(data);
+      const nyq=audioCtx.sampleRate/2, bins=analyser.frequencyBinCount, fpb=nyq/bins;
+      const bEnd=Math.min(Math.floor(150/fpb),bins); let bSum=0;
+      for(let i=0;i<bEnd;i++) bSum+=data[i];
+      const bass=bSum/Math.max(bEnd*255,1);
+      const tSt=Math.min(Math.floor(2000/fpb),bins);
+      const tEn=Math.min(Math.floor(8000/fpb),bins); let tSum=0;
+      for(let i=tSt;i<tEn;i++) tSum+=data[i];
+      const treble=tSum/Math.max((tEn-tSt)*255,1);
+      return{bass,treble};
+    }
+
+    // ============================================
+    // UI
+    // ============================================
+    function makeEq(){
+      const c=document.getElementById('equalizer');
+      for(let i=0;i<8;i++){const b=document.createElement('div');b.className='eq-bar';b.style.height='2px';c.appendChild(b);eqBars.push(b);}
+    }
+    function updateEq(dataArray){
+      if(!analyser) return;
+      const bpb=Math.floor(dataArray.length/eqBars.length);
+      for(let i=0;i<eqBars.length;i++){
+        let s=0; for(let j=0;j<bpb;j++) s+=dataArray[i*bpb+j];
+        eqBars[i].style.height=Math.max(2,(s/bpb/255)*30)+'px';
+      }
+    }
+
+    function setupUI(){
+      const audIn=document.getElementById('audio-input');
+      const btnLoad=document.getElementById('btn-load');
+      const btnPlay=document.getElementById('btn-play');
+      const btnChange=document.getElementById('btn-change');
+      const sldThm=document.getElementById('slider-theme');
+      const lblThm=document.getElementById('theme-label');
+
+      btnLoad.addEventListener('click',()=> audIn.click());
+      btnPlay.addEventListener('click',()=>{
+        if(!audioEl) return;
+        if(isPlaying){audioEl.pause();btnPlay.textContent='Play';}
+        else{audioEl.play();btnPlay.textContent='Pause';}
+        isPlaying=!isPlaying;
+      });
+      btnChange.addEventListener('click',()=>{
+        if(audioEl){audioEl.pause();audioEl=null;}
+        audIn.value=''; audIn.click();
+      });
+      audIn.addEventListener('change',(e)=>{const f=e.target.files[0]; if(f) loadAudio(f);});
+      sldThm.addEventListener('input',(e)=>{
+        const v=parseFloat(e.target.value);
+        lblThm.textContent=themeNames[Math.min(Math.round(v),4)];
+      });
+      makeEq();
+      document.addEventListener('click',()=>{if(audioCtx&&audioCtx.state==='suspended') audioCtx.resume();},{once:true});
+    }
+
+    // ============================================
+    // LOOP + PING-PONG
+    // ============================================
+    function animate(time){
+      requestAnimationFrame(animate);
+      const elapsed=time*0.001;
+
+      // Audio
+      let a={bass:0,treble:0};
+      let freqData=null;
+      if(analyser){
+        a=getAudio();
+        freqData=new Uint8Array(analyser.frequencyBinCount);
+        analyser.getByteFrequencyData(freqData);
+      }
+
+      // Smoothing sfera
+      const curBass=matSolid.uniforms.uBass.value;
+      const curTreble=matSolid.uniforms.uTreble.value;
+      matSolid.uniforms.uBass.value+=(a.bass-curBass)*0.15;
+      matSolid.uniforms.uTreble.value+=(a.treble-curTreble)*0.2;
+      matSolid.uniforms.uTime.value=elapsed;
+      const bass=matSolid.uniforms.uBass.value;
+      const treble=matSolid.uniforms.uTreble.value;
+
+      // Tema
+      const themeVal=parseFloat(document.getElementById('slider-theme').value);
+      matSolid.uniforms.uTheme.value=themeVal;
+      if(wireMesh.visible){
+        wireMat.uniforms.uTime.value=elapsed;
+        wireMat.uniforms.uBass.value=bass;
+        wireMat.uniforms.uTreble.value=treble;
+        wireMat.uniforms.uTheme.value=themeVal;
+      }
+
+      // ============================================
+      // PARTICELLE
+      // ============================================
+      const positions=particles.attributes.position.array;
+      const colors=particles.attributes.color.array;
+      const count=3000;
+      const activation=bass*0.6+treble*0.4;
+      const tIdx=Math.round(themeVal);
+      const tc=themeColors[Math.min(tIdx,4)];
+
+      for(let i=0;i<count;i++){
+        const idx=i*3;
+        const phase=particlePhases[i];
+
+        // Velocita orbitale aumentata dai bassi
+        const orbitSpeed=0.2+activation*1.8;
+        positions[idx]+=Math.sin(elapsed*orbitSpeed+phase)*0.002;
+        positions[idx+1]+=Math.cos(elapsed*orbitSpeed*0.7+phase*1.3)*0.002;
+        positions[idx+2]+=Math.sin(elapsed*orbitSpeed*0.5+phase*0.8)*0.0015;
+
+        // Accensione randomica
+        const rnd=Math.random();
+        const threshold=activation*0.9;
+        if(rnd<threshold){
+          const intensity=0.2+Math.random()*0.8;
+          colors[idx]=tc.r*intensity;
+          colors[idx+1]=tc.g*intensity;
+          colors[idx+2]=tc.b*intensity;
+        }else{
+          colors[idx]*=0.91; colors[idx+1]*=0.91; colors[idx+2]*=0.91;
+          if(colors[idx]<0.02)colors[idx]=0.02;
+          if(colors[idx+1]<0.02)colors[idx+1]=0.02;
+          if(colors[idx+2]<0.04)colors[idx+2]=0.04;
+        }
+
+        // Esplosione + flash bianco
+        if(bass>0.6&&Math.random()<0.07){
+          const dx=positions[idx],dy=positions[idx+1],dz=positions[idx+2];
+          const dist=Math.sqrt(dx*dx+dy*dy+dz*dz);
+          if(dist>0.1){
+            const push=0.04*bass;
+            positions[idx]+=(dx/dist)*push;
+            positions[idx+1]+=(dy/dist)*push;
+            positions[idx+2]+=(dz/dist)*push;
+            colors[idx]=1.0; colors[idx+1]=1.0; colors[idx+2]=1.0;
+          }
+        }
+      }
+      particles.attributes.position.needsUpdate=true;
+      particles.attributes.color.needsUpdate=true;
+      particleSystem.material.size=0.03+activation*0.09;
+
+      // Rotazione scena
+      scene.rotation.y=elapsed*0.1;
+      scene.rotation.x=Math.sin(elapsed*0.1)*0.05;
+
+      // ============================================
+      // PING-PONG FEEDBACK (3 passi)
+      // ============================================
+
+      // Passo 1: applica zoom+blur+fade del frame precedente su rtB
+      feedbackMat.uniforms.tDiffuse.value=rtA.texture;
+      // Bassi accelerano lo zoom (zoom PIU piccolo = convergenza piu rapida = scie corte)
+      // Quando bassi forti, zoom diventa piu piccolo (p.es. 0.996 invece di 0.998)
+      feedbackMat.uniforms.uZoom.value=0.998-bass*0.004;
+      // Fade: ALTO 0.97 = scie LUNGHE. Con bassi, fade scende leggermente (scie piu corte ma piu intense)
+      feedbackMat.uniforms.uFade.value=0.97+bass*0.03; // quando bassi forti, fade va a 1.0 = quasi no fade!
+      feedbackMat.uniforms.uBlur.value=0.8+bass*0.5; // piu blur con bassi
+      renderer.setRenderTarget(rtB);
+      renderer.clear();
+      renderer.render(feedbackScene,orthoCamera);
+
+      // Passo 2: renderizza scena 3D sopra rtB, SENZA cancellare (autoClear=false)
+      // IMPORTANTE: la scena NON ha background, quindi non copre il feedback
+      renderer.autoClear=false;
+      renderer.render(scene,camera,rtB);
+      renderer.autoClear=true;
+
+      // Passo 3: mostra rtB sul canvas
+      renderer.setRenderTarget(null);
+      displayMat.uniforms.tDiffuse.value=rtB.texture;
+      renderer.render(displayScene,orthoCamera);
+
+      // Passo 4: swap
+      const temp=rtA; rtA=rtB; rtB=temp;
+
+      if(freqData) updateEq(freqData);
+    }
+
+    init(); setupUI(); animate(0);
+  </script>
+</body>
+</html>
