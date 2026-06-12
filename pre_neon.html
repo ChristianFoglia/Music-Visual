@@ -213,40 +213,40 @@
         float chaos=sin(tt*13.0)*0.5+0.5;
         if(idx<0.5){
           vec3 hotPink=vec3(1.0,0.0,0.5);
-          vec3 fuchsia=vec3(0.9,0.0,0.7);
+          vec3 electricBlue=vec3(0.2,0.6,1.0);
           vec3 acidGreen=vec3(0.6,1.0,0.2);
           vec3 deepPurple=vec3(0.4,0.0,0.8);
-          vec3 magenta=vec3(1.0,0.0,0.8);
-          vec3 mix1=mix(hotPink,fuchsia,wave);
+          vec3 peach=vec3(1.0,0.6,0.4);
+          vec3 mix1=mix(hotPink,electricBlue,wave);
           vec3 mix2=mix(acidGreen,deepPurple,wave2);
           vec3 mix3=mix(mix1,mix2,wave3);
-          return mix(mix3,magenta,chaos*0.5);
+          return mix(mix3,peach,chaos*0.5);
         }else if(idx<1.5){
           vec3 lemon=vec3(1.0,0.9,0.0);
           vec3 hotMagenta=vec3(1.0,0.0,0.6);
           vec3 toxicGreen=vec3(0.0,1.0,0.3);
           vec3 bloodOrange=vec3(1.0,0.2,0.0);
-          vec3 gold=vec3(1.0,0.6,0.0);
+          vec3 skyCyan=vec3(0.0,0.8,1.0);
           vec3 mix1=mix(lemon,hotMagenta,wave);
           vec3 mix2=mix(toxicGreen,bloodOrange,wave2);
           vec3 mix3=mix(mix1,mix2,wave3);
-          return mix(mix3,gold,chaos*0.4);
+          return mix(mix3,skyCyan,chaos*0.4);
         }else if(idx<2.5){
           vec3 navy=vec3(0.0,0.1,0.6);
           vec3 neonCyan=vec3(0.0,1.0,1.0);
           vec3 sunsetOrange=vec3(1.0,0.3,0.1);
           vec3 laserPink=vec3(1.0,0.0,0.8);
-          vec3 deepBlue=vec3(0.0,0.2,0.9);
+          vec3 iceWhite=vec3(0.8,0.9,1.0);
           vec3 mix1=mix(navy,neonCyan,wave);
           vec3 mix2=mix(sunsetOrange,laserPink,wave2);
           vec3 mix3=mix(mix1,mix2,wave3);
-          return mix(mix3,deepBlue,chaos*0.3);
+          return mix(mix3,iceWhite,chaos*0.3);
         }else if(idx<3.5){
-          float dark=sin(t*2.0+uTime*0.15)*0.3+0.2;
+          float grey=sin(t*2.0+uTime*0.15)*0.5+0.5;
           float tint=sin(t*8.0+uTime*0.5)*0.5+0.5;
-          vec3 darkBase=vec3(dark*0.15,dark*0.2,dark*0.35);
-          vec3 neon=vec3(0.0,1.0,1.0)*(0.3+uTreble*0.5);
-          return mix(darkBase,neon,tint*uTreble*0.3);
+          vec3 bw=vec3(grey);
+          vec3 neon=vec3(0.0,1.0,1.0)*(0.3+uTreble*0.2);
+          return mix(bw,neon,tint*uTreble*0.15);
         }else{
           float r=sin(t*6.0+uTime*0.4)*0.5+0.5;
           float g=sin(t*6.0+uTime*0.4+2.094)*0.5+0.5;
@@ -678,35 +678,7 @@
       uniform float uRadici;
       uniform float uBass;
       uniform float uSymMode;
-      uniform float uTime;
       varying vec2 vUv;
-
-      // Gradient neon: solo colori saturi, mai bianco
-      vec3 neonGradient(float y, float t){
-        // 5 colori neon che scorrono verticalmente
-        vec3 neonPink=vec3(1.0,0.0,0.8);    // rosa neon
-        vec3 neonCyan=vec3(0.0,1.0,1.0);    // ciano neon
-        vec3 neonLime=vec3(0.6,1.0,0.0);    // lime neon
-        vec3 neonYellow=vec3(1.0,0.9,0.0);  // giallo neon
-        vec3 neonPurple=vec3(0.8,0.0,1.0);  // viola neon
-
-        float phase=t*0.15;
-        float pos=y*4.0+phase;
-
-        float p1=fract(pos);
-        float p2=fract(pos+1.0);
-        float p3=fract(pos+2.0);
-        float p4=fract(pos+3.0);
-        float p5=fract(pos+4.0);
-
-        vec3 col=mix(neonPink,neonCyan,smoothstep(0.0,0.25,p1));
-        col=mix(col,neonLime,smoothstep(0.25,0.50,p2));
-        col=mix(col,neonYellow,smoothstep(0.50,0.75,p3));
-        col=mix(col,neonPurple,smoothstep(0.75,1.0,p4));
-        col=mix(col,neonPink,smoothstep(0.0,0.25,p5));
-
-        return col;
-      }
 
       vec2 applySym(vec2 uv, float mode){
         if(mode<0.5) return uv;
@@ -745,17 +717,6 @@
         // Re-clamp dopo aggiunta radici
         float mx2=max(finale.r,max(finale.g,finale.b));
         if(mx2>1.0) finale/=mx2;
-
-        // --- SFUMATURA NEON ---
-        // Overlay gradient neon che scorre verticalmente
-        vec3 neon=neonGradient(uv.y,uTime);
-        // Intensita della sfumatura: bassa per non coprire, reattiva leggermente ai bassi
-        float neonIntensity=0.12+uBass*0.08;
-        // Mix additivo con neon (mai sostituisce completamente)
-        finale=mix(finale, finale+neon*0.4, neonIntensity);
-        // Re-clamp finale
-        float mx3=max(finale.r,max(finale.g,finale.b));
-        if(mx3>1.0) finale/=mx3;
 
         gl_FragColor=vec4(finale,alpha);
       }
@@ -1121,7 +1082,7 @@
       mixerMat=new THREE.ShaderMaterial({
         uniforms:{
           tScene:{value:null},tNuvole:{value:null},tRadici:{value:null},tMuschio:{value:null},
-          uNuvole:{value:0},uRadici:{value:0},uBass:{value:0},uSymMode:{value:0},uTime:{value:0}
+          uNuvole:{value:0},uRadici:{value:0},uBass:{value:0},uSymMode:{value:0}
         },
         vertexShader:vsDisplay,fragmentShader:fsMixer,
         depthWrite:false
@@ -1762,7 +1723,6 @@
       mixerMat.uniforms.uNuvole.value=nuvoleVal;
       mixerMat.uniforms.uRadici.value=radiciVal;
       mixerMat.uniforms.uBass.value=bass;
-      mixerMat.uniforms.uTime.value=elapsed;
 
       const organicVal=parseFloat(document.getElementById('slider-organic').value);
       const assurdoVal=parseFloat(document.getElementById('slider-assurdo').value);
